@@ -1,62 +1,5 @@
 🚀 Next.js App Deployment on Hostinger VPS (HTTPS)
 
-Prerequisites
-- Hostinger VPS purchased
-- Domain name available (research.hasaniche.com)
-- GitHub repository ready for this frontend (e.g., git@github.com:yourusername/productresearch-hasaniche-frontend.git)
-- App defaults to listening on PORT 3010
-- NOTE: This is a Next.js (App Router) app, NOT a static Vite build. It has a dynamic route
-  (/products/[id]), so it runs as a Node process ("next start") behind Nginx — the same
-  reverse-proxy pattern as the other apps, just serving a Next server instead of a static dist/.
-
-1️⃣ SSH INTO VPS (ROOT)
-From Windows PowerShell / Terminal:
-
-ssh root@<YOUR_VPS_IP>
-
-👉 Accept fingerprint by typing yes
-👉 Enter root password (you will NOT see characters while typing – this is normal)
-
-2️⃣ CREATE A NON-ROOT DEPLOY USER (SECURITY)
-adduser deploy
-usermod -aG sudo deploy
-
-Switch to deploy user:
-su - deploy
-
-3️⃣ UPDATE SERVER
-sudo apt update && sudo apt upgrade -y
-
-4️⃣ INSTALL NODE.JS (LTS)
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-
-Verify:
-node -v
-npm -v
-
-5️⃣ INSTALL PM2 (PROCESS MANAGER)
-sudo npm install -g pm2
-
-6️⃣ INSTALL NGINX (REVERSE PROXY)
-sudo apt install -y nginx
-sudo systemctl start nginx
-sudo systemctl enable nginx
-
-Test:
-curl http://localhost
-
-7️⃣ CONFIGURE FIREWALL (UFW)
-sudo ufw allow OpenSSH
-sudo ufw allow 80
-sudo ufw allow 443
-sudo ufw enable
-sudo ufw status
-
-*(Note: We do not need to open port 3010 to the public, Nginx will handle routing internally)*
-
-8️⃣ CLONE NEXT.JS APP FROM GITHUB
-mkdir -p ~/apps
 cd ~/apps
 git clone git@github.com:yourusername/productresearch-hasaniche-frontend.git
 cd productresearch-hasaniche-frontend
@@ -76,7 +19,7 @@ nano .env.production
 Build the production version:
 npm run build
 
-Start with PM2 (runs `next start -p 3010` as a managed process):
+Start with PM2 (runs `next start -p 3012` as a managed process):
 pm2 start npm --name "product-research-frontend" -- start
 
 Check:
@@ -112,7 +55,7 @@ server {
     server_name research.hasaniche.com;
 
     location / {
-        proxy_pass http://localhost:3010;
+        proxy_pass http://localhost:3012;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -159,8 +102,8 @@ su - deploy
 pm2 list
 
 ✅ DEPLOYMENT COMPLETE 🎉
-- Next.js app running via PM2 ("next start" on port 3010)
-- Nginx reverse proxy routing port 80/443 to 3010
+- Next.js app running via PM2 ("next start" on port 3012)
+- Nginx reverse proxy routing port 80/443 to 3012
 - HTTPS enabled via Certbot
 - Auto-restart on reboot configured
 - Secure firewall

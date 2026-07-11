@@ -3,7 +3,7 @@
 # ════════════════════════════════════════════════════════════
 #  PRODUCTION DEPLOYMENT — Product Research Frontend (Next.js)
 #  URL: https://research.hasaniche.com
-#  Served as: Next.js process (next start :3010) via PM2 + Nginx
+#  Served as: Next.js process (next start :3012) via PM2 + Nginx
 #  Directory: /home/deploy/apps/productresearch-hasaniche-frontend
 # ════════════════════════════════════════════════════════════
 
