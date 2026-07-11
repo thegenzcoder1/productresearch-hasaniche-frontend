@@ -1,0 +1,169 @@
+🚀 Next.js App Deployment on Hostinger VPS (HTTPS)
+
+Prerequisites
+- Hostinger VPS purchased
+- Domain name available (research.hasaniche.com)
+- GitHub repository ready for this frontend (e.g., git@github.com:yourusername/productresearch-hasaniche-frontend.git)
+- App defaults to listening on PORT 3010
+- NOTE: This is a Next.js (App Router) app, NOT a static Vite build. It has a dynamic route
+  (/products/[id]), so it runs as a Node process ("next start") behind Nginx — the same
+  reverse-proxy pattern as the other apps, just serving a Next server instead of a static dist/.
+
+1️⃣ SSH INTO VPS (ROOT)
+From Windows PowerShell / Terminal:
+
+ssh root@<YOUR_VPS_IP>
+
+👉 Accept fingerprint by typing yes
+👉 Enter root password (you will NOT see characters while typing – this is normal)
+
+2️⃣ CREATE A NON-ROOT DEPLOY USER (SECURITY)
+adduser deploy
+usermod -aG sudo deploy
+
+Switch to deploy user:
+su - deploy
+
+3️⃣ UPDATE SERVER
+sudo apt update && sudo apt upgrade -y
+
+4️⃣ INSTALL NODE.JS (LTS)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+
+Verify:
+node -v
+npm -v
+
+5️⃣ INSTALL PM2 (PROCESS MANAGER)
+sudo npm install -g pm2
+
+6️⃣ INSTALL NGINX (REVERSE PROXY)
+sudo apt install -y nginx
+sudo systemctl start nginx
+sudo systemctl enable nginx
+
+Test:
+curl http://localhost
+
+7️⃣ CONFIGURE FIREWALL (UFW)
+sudo ufw allow OpenSSH
+sudo ufw allow 80
+sudo ufw allow 443
+sudo ufw enable
+sudo ufw status
+
+*(Note: We do not need to open port 3010 to the public, Nginx will handle routing internally)*
+
+8️⃣ CLONE NEXT.JS APP FROM GITHUB
+mkdir -p ~/apps
+cd ~/apps
+git clone git@github.com:yourusername/productresearch-hasaniche-frontend.git
+cd productresearch-hasaniche-frontend
+
+Install dependencies:
+npm install
+
+🚨 IMPORTANT — SET THE API URL BEFORE BUILDING
+NEXT_PUBLIC_* variables are baked in at BUILD time, so this file must exist BEFORE `npm run build`.
+nano .env.production
+(Paste the line below, then save and exit: CTRL+O, ENTER, CTRL+X)
+
+  NEXT_PUBLIC_API_URL=https://researchapi.hasaniche.com
+
+9️⃣ BUILD AND START NEXT.JS APP WITH PM2
+
+Build the production version:
+npm run build
+
+Start with PM2 (runs `next start -p 3010` as a managed process):
+pm2 start npm --name "product-research-frontend" -- start
+
+Check:
+pm2 list
+
+🔟 ENABLE PM2 AUTO-START ON REBOOT
+pm2 startup
+
+👉 Copy the command PM2 shows and run it (example):
+sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u deploy --hp /home/deploy
+
+Save process:
+pm2 save
+
+1️⃣1️⃣ SET DOMAIN DNS (HOSTINGER PANEL)
+
+🚨 IMPORTANT: Having duplicate records will break your website!
+In Hostinger DNS Zone Editor, set up your sub-domain record for research.hasaniche.com.
+
+👉 Add NEW A Record:
+Type    Host       Value           TTL
+A       research   <YOUR_VPS_IP>   Auto
+
+Wait 1–5 minutes.
+
+1️⃣2️⃣ CREATE NGINX CONFIG FOR FRONTEND
+sudo nano /etc/nginx/sites-available/research.hasaniche.com
+
+Paste:
+
+server {
+    listen 80;
+    server_name research.hasaniche.com;
+
+    location / {
+        proxy_pass http://localhost:3010;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+
+Save & exit nano:
+CTRL + O → ENTER → CTRL + X
+
+Enable site:
+sudo ln -s /etc/nginx/sites-available/research.hasaniche.com /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+
+Check If Site is Enabled:
+sudo ls -l /etc/nginx/sites-enabled/
+
+Test:
+http://research.hasaniche.com
+
+1️⃣3️⃣ INSTALL CERTBOT (SSL)
+sudo apt install -y certbot python3-certbot-nginx
+
+1️⃣4️⃣ ENABLE HTTPS (LET’S ENCRYPT)
+sudo certbot --nginx -d research.hasaniche.com
+
+✔ Choose Redirect HTTP → HTTPS when prompted
+
+1️⃣5️⃣ VERIFY HTTPS
+Open browser:
+https://research.hasaniche.com
+
+1️⃣6️⃣ FINAL HEALTH CHECK
+pm2 list
+sudo systemctl status nginx
+
+Reboot test:
+sudo reboot
+
+Reconnect and confirm:
+su - deploy
+pm2 list
+
+✅ DEPLOYMENT COMPLETE 🎉
+- Next.js app running via PM2 ("next start" on port 3010)
+- Nginx reverse proxy routing port 80/443 to 3010
+- HTTPS enabled via Certbot
+- Auto-restart on reboot configured
+- Secure firewall
+
+⚠️ REMINDER: The backend (researchapi.hasaniche.com) must be deployed too, and its CORS must
+allow https://research.hasaniche.com. See the backend deployment guide.

@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --ring: 13 148 136;
+}
+
+html, body {
+  background: #f4f5f7;
+  color: #1f2430;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .section-title {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl border border-gray-200/80 shadow-[0_1px_2px_rgba(16,24,40,0.04)];
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold
+           transition-all duration-150 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none;
+  }
+  .btn-primary { @apply bg-accent text-white shadow-sm hover:bg-teal-700; }
+  .btn-ghost   { @apply text-gray-600 hover:bg-gray-100; }
+  .btn-danger  { @apply bg-danger text-white shadow-sm hover:bg-red-600; }
+  .btn-soft    { @apply bg-gray-100 text-gray-700 hover:bg-gray-200; }
+  .btn-sm      { @apply px-2.5 py-1.5 text-xs rounded-lg; }
+
+  /* Inputs */
+  .input {
+    @apply w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-ink
+           placeholder:text-gray-400 transition
+           focus:outline-none focus:ring-4 focus:ring-accent/15 focus:border-accent;
+  }
+
+  /* Boxed list row */
+  .item-box {
+    @apply flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5
+           transition hover:border-gray-300 hover:shadow-[0_1px_3px_rgba(16,24,40,0.06)];
+  }
+
+  .empty-box {
+    @apply rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-5
+           text-center text-sm text-gray-400;
+  }
+
+  .icon-x {
+    @apply grid place-items-center w-7 h-7 rounded-lg text-gray-300 hover:text-danger hover:bg-danger/10 transition shrink-0;
+  }
+}
