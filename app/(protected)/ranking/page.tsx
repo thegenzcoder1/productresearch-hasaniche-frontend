@@ -12,8 +12,10 @@ type Item = {
   sourcing_cost: string;
   mrp: string;
   amazon_sold_last_month: string;
-  ig_impressions_6m: string;
   ad_angles: string[];
+  // read-only signals (from backend, not editable here)
+  total_impressions: number;
+  amazon_rating: number | null;
 };
 
 const toItem = (p: any): Item => ({
@@ -24,8 +26,9 @@ const toItem = (p: any): Item => ({
   sourcing_cost: p.sourcing_cost == null ? '' : String(p.sourcing_cost),
   mrp: p.mrp == null ? '' : String(p.mrp),
   amazon_sold_last_month: p.amazon_sold_last_month == null ? '' : String(p.amazon_sold_last_month),
-  ig_impressions_6m: p.ig_impressions_6m == null ? '' : String(p.ig_impressions_6m),
   ad_angles: p.ad_angles || [],
+  total_impressions: Number(p.total_impressions || 0),
+  amazon_rating: p.amazon_rating == null ? null : Number(p.amazon_rating),
 });
 
 export default function RankingPage() {
@@ -98,7 +101,6 @@ export default function RankingPage() {
               sourcing_cost: it.sourcing_cost === '' ? null : Number(it.sourcing_cost),
               mrp: it.mrp === '' ? null : Number(it.mrp),
               amazon_sold_last_month: it.amazon_sold_last_month === '' ? null : Number(it.amazon_sold_last_month),
-              ig_impressions_6m: it.ig_impressions_6m === '' ? null : Number(it.ig_impressions_6m),
               ad_angles: it.ad_angles,
             }),
           });
@@ -166,24 +168,30 @@ export default function RankingPage() {
                           {margin >= 0 ? '▲' : '▼'} {fmtMoney(Math.abs(margin))}{marginPct != null ? ` (${marginPct}%)` : ''}
                         </span>
                       )}
+                      <span title="Ad angles">🎯 {p.ad_angles.length}</span>
+                      <span title="Amazon sold / month">🛒 {fmtNum(p.amazon_sold_last_month === '' ? null : Number(p.amazon_sold_last_month))}</span>
+                      <span title="Impressions (summed from ad links)">👁 {fmtNum(p.total_impressions)}</span>
+                      {p.amazon_rating != null && <span title="Amazon rating" className="text-amber-500">⭐ {p.amazon_rating.toFixed(1)}</span>}
                     </div>
                   </div>
                   <div className="flex flex-col shrink-0">
                     <button className="text-gray-400 hover:text-ink disabled:opacity-25 leading-none px-1" disabled={i === 0} onClick={() => move(p.id, 'up')}>▲</button>
                     <button className="text-gray-400 hover:text-ink disabled:opacity-25 leading-none px-1" disabled={i === items.length - 1} onClick={() => move(p.id, 'down')}>▼</button>
                   </div>
-                  <button className={`btn btn-sm shrink-0 ${open ? 'btn-soft' : 'btn-primary'}`} onClick={() => setExpanded(open ? null : p.id)}>
-                    {open ? 'Close' : 'Edit'}
+                  <button className={`btn btn-sm shrink-0 ${open ? 'btn-danger' : 'btn-primary'}`} onClick={() => setExpanded(open ? null : p.id)}>
+                    {open ? '✕ Close' : 'Edit'}
                   </button>
                 </div>
 
                 {open && (
                   <div className="border-t border-gray-100 p-4 bg-gray-50/50 space-y-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <StatTile label="Sourcing" value={fmtMoney(sc)} />
                       <StatTile label="MRP" value={fmtMoney(mrp)} tone="accent" />
                       <StatTile label="Margin" value={margin == null ? '—' : fmtMoney(margin)} sub={marginPct == null ? undefined : `${marginPct}%`} tone={margin == null ? 'default' : margin >= 0 ? 'good' : 'bad'} />
                       <StatTile label="Amazon / mo" value={fmtNum(p.amazon_sold_last_month === '' ? null : Number(p.amazon_sold_last_month))} />
+                      <StatTile label="Impressions" value={fmtNum(p.total_impressions)} sub="from ad links" />
+                      <StatTile label="Amazon rating" value={p.amazon_rating == null ? '—' : `${p.amazon_rating.toFixed(1)} ★`} />
                     </div>
 
                     <Field label="Pain point / problem solved">
@@ -210,11 +218,10 @@ export default function RankingPage() {
                         <input className="input" type="number" placeholder="e.g. 12000"
                           value={p.amazon_sold_last_month} onChange={(e) => setField(p.id, 'amazon_sold_last_month', e.target.value)} />
                       </Field>
-                      <Field label="IG impressions (6 mo)">
-                        <input className="input" type="number" placeholder="e.g. 2400000"
-                          value={p.ig_impressions_6m} onChange={(e) => setField(p.id, 'ig_impressions_6m', e.target.value)} />
-                      </Field>
                     </div>
+                    <p className="text-xs text-gray-400">
+                      👁 Impressions ({fmtNum(p.total_impressions)}) are summed automatically from this product’s ad-link impressions — edit them on the product page.
+                    </p>
 
                     <AdAngles angles={p.ad_angles} onChange={(next) => setField(p.id, 'ad_angles', next)} />
                   </div>

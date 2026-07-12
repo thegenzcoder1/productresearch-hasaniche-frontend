@@ -35,9 +35,13 @@ export default function ProductsPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    const nm = name.trim();
+    if (!nm) return;
+    if (products.some((p) => p.name.trim().toLowerCase() === nm.toLowerCase())) {
+      toast('A product with this name already exists', 'err'); return;
+    }
     try {
-      const { id } = await api('/api/products', { method: 'POST', body: JSON.stringify({ name }) });
+      const { id } = await api('/api/products', { method: 'POST', body: JSON.stringify({ name: nm }) });
       setName(''); setCreating(false);
       window.location.href = `/products/${id}`;
     } catch (e: any) { toast(e.message, 'err'); }

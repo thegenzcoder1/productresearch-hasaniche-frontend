@@ -3,17 +3,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, upload, imgUrl } from '@/lib/api';
-import { StatTile, PendingBadge, SectionCard, EmptyState, ConfirmButton, Field, fmtMoney } from '@/components/ui';
+import { StatTile, PendingBadge, SectionCard, EmptyState, ConfirmButton, Field, fmtMoney, fmtNum } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 
 type Supplier = { name: string; phone: string };
-type AdLink = { url: string; label: string; status: 'pending' | 'done'; created_at?: string };
+type AdLink = { url: string; label: string; impression: string; status: 'pending' | 'done'; created_at?: string };
 type Comment = { body: string; created_at?: string };
 type Draft = {
   name: string;
   description: string;
   sourcing_cost: string;
   mrp: string;
+  amazon_rating: string;
   image_path: string | null;
   suppliers: Supplier[];
   tags: string[];
@@ -26,10 +27,11 @@ const toDraft = (p: any): Draft => ({
   description: p.description ?? '',
   sourcing_cost: p.sourcing_cost == null ? '' : String(p.sourcing_cost),
   mrp: p.mrp == null ? '' : String(p.mrp),
+  amazon_rating: p.amazon_rating == null ? '' : String(p.amazon_rating),
   image_path: p.image_path ?? null,
   suppliers: (p.suppliers || []).map((s: any) => ({ name: s.name || '', phone: s.phone || '' })),
   tags: (p.tags || []).map((t: any) => (typeof t === 'string' ? t : t.tag)),
-  ad_links: (p.ad_links || []).map((l: any) => ({ url: l.url, label: l.label || '', status: l.status, created_at: l.created_at })),
+  ad_links: (p.ad_links || []).map((l: any) => ({ url: l.url, label: l.label || '', impression: l.impression == null ? '' : String(l.impression), status: l.status, created_at: l.created_at })),
   comments: (p.comments || []).map((c: any) => ({ body: c.body, created_at: c.created_at })),
 });
 
@@ -86,9 +88,16 @@ export default function ProductDetail() {
 
   // ---- the ONLY function that talks to the backend for edits ----
   const save = async () => {
-    if (!draft.name.trim()) { toast('Name is required', 'err'); return; }
+    const nm = draft.name.trim();
+    if (!nm) { toast('Name is required', 'err'); return; }
     setSaving(true);
     try {
+      // Duplicate product-name guard (against other active products)
+      const all = await api('/api/products');
+      if (all.some((x: any) => x.id !== Number(id) && (x.name || '').trim().toLowerCase() === nm.toLowerCase())) {
+        toast('A product with this name already exists', 'err');
+        return;
+      }
       if (imageFile) {
         const form = new FormData();
         form.append('image', imageFile);
@@ -101,9 +110,10 @@ export default function ProductDetail() {
           description: draft.description.trim() || null,
           sourcing_cost: draft.sourcing_cost === '' ? null : Number(draft.sourcing_cost),
           mrp: draft.mrp === '' ? null : Number(draft.mrp),
+          amazon_rating: draft.amazon_rating === '' ? null : Number(draft.amazon_rating),
           suppliers: draft.suppliers,
           tags: draft.tags,
-          ad_links: draft.ad_links,
+          ad_links: draft.ad_links.map((l) => ({ ...l, impression: l.impression === '' ? null : Number(l.impression) })),
           comments: draft.comments,
         }),
       });
@@ -189,6 +199,21 @@ export default function ProductDetail() {
         </div>
       </SectionCard>
 
+      {/* Amazon rating */}
+      <SectionCard title="Amazon rating" icon="⭐">
+        <div className="flex items-center gap-4">
+          <div className="w-28 shrink-0">
+            <input className="input" type="number" min="0" max="5" step="0.1" placeholder="0.0"
+              value={draft.amazon_rating} onChange={(e) => set({ amazon_rating: e.target.value })} />
+          </div>
+          <div className="text-sm">
+            {draft.amazon_rating === ''
+              ? <span className="text-gray-400">No rating yet (out of 5)</span>
+              : <span className="text-ink font-semibold">{Number(draft.amazon_rating).toFixed(1)} <span className="text-amber-400">★</span> <span className="text-gray-400 font-normal">/ 5</span></span>}
+          </div>
+        </div>
+      </SectionCard>
+
       {/* Description */}
       <SectionCard title="Description" icon="📝">
         <textarea className="input min-h-[84px] resize-y" placeholder="What is this product? Notes, research findings…"
@@ -230,20 +255,27 @@ export default function ProductDetail() {
 
 /* ---------------- Ad links (local) ---------------- */
 function AdLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>) => void }) {
+  const { toast } = useToast();
   const [url, setUrl] = useState('');
   const [label, setLabel] = useState('');
+  const [impression, setImpression] = useState('');
   const add = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url.trim()) return;
-    set({ ad_links: [...draft.ad_links, { url: url.trim(), label: label.trim(), status: 'pending' }] });
-    setUrl(''); setLabel('');
+    const u = url.trim();
+    if (!u) return;
+    if (draft.ad_links.some((l) => l.url.trim().toLowerCase() === u.toLowerCase())) {
+      toast('This link already exists', 'err'); return;
+    }
+    set({ ad_links: [...draft.ad_links, { url: u, label: label.trim(), impression: impression.trim(), status: 'pending' }] });
+    setUrl(''); setLabel(''); setImpression('');
   };
   const toggle = (i: number) => set({ ad_links: draft.ad_links.map((l, idx) => idx === i ? { ...l, status: l.status === 'pending' ? 'done' : 'pending' } : l) });
   const del = (i: number) => set({ ad_links: draft.ad_links.filter((_, idx) => idx !== i) });
   const pending = draft.ad_links.filter((l) => l.status === 'pending').length;
+  const totalImp = draft.ad_links.reduce((s, l) => s + (l.impression === '' ? 0 : Number(l.impression) || 0), 0);
   return (
     <SectionCard title="Ad / creative links" icon="🎬"
-      action={<span className="text-xs text-gray-400">{draft.ad_links.length} total · {pending} pending</span>}>
+      action={<span className="text-xs text-gray-400">{draft.ad_links.length} total · {pending} pending · 👁 {fmtNum(totalImp)}</span>}>
       <div className="space-y-2 mb-3">
         {draft.ad_links.length === 0 && <EmptyState>No links yet — add creatives to review.</EmptyState>}
         {draft.ad_links.map((l, i) => (
@@ -253,13 +285,15 @@ function AdLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>)
               {l.status === 'done' ? '✓ Done' : '● Pending'}
             </button>
             <a href={l.url} target="_blank" rel="noreferrer" className="text-sm text-accent hover:underline truncate flex-1 min-w-0">{l.label || l.url}</a>
+            {l.impression !== '' && <span className="text-xs text-gray-500 shrink-0 whitespace-nowrap" title="Impressions">👁 {fmtNum(Number(l.impression))}</span>}
             <button type="button" onClick={() => del(i)} className="icon-x" aria-label="Delete">✕</button>
           </div>
         ))}
       </div>
       <form onSubmit={add} className="rounded-xl border border-gray-200 bg-gray-50/60 p-2 flex gap-2 flex-wrap">
-        <input className="input flex-1 min-w-[160px] bg-white" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} />
-        <input className="input w-36 bg-white" placeholder="Label (optional)" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <input className="input flex-1 min-w-[150px] bg-white" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} />
+        <input className="input w-28 bg-white" placeholder="Label" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <input className="input w-28 bg-white" type="number" placeholder="Impressions" value={impression} onChange={(e) => setImpression(e.target.value)} />
         <button className="btn btn-primary shrink-0">Add link</button>
       </form>
     </SectionCard>
@@ -268,12 +302,17 @@ function AdLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>)
 
 /* ---------------- Suppliers (local) ---------------- */
 function SuppliersSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>) => void }) {
+  const { toast } = useToast();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const add = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    set({ suppliers: [...draft.suppliers, { name: name.trim(), phone: phone.trim() }] });
+    const n = name.trim();
+    if (!n) return;
+    if (draft.suppliers.some((s) => s.name.trim().toLowerCase() === n.toLowerCase())) {
+      toast('This supplier already exists', 'err'); return;
+    }
+    set({ suppliers: [...draft.suppliers, { name: n, phone: phone.trim() }] });
     setName(''); setPhone('');
   };
   const del = (i: number) => set({ suppliers: draft.suppliers.filter((_, idx) => idx !== i) });
@@ -301,13 +340,22 @@ function SuppliersSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft
 
 /* ---------------- Tags (local) ---------------- */
 function TagsSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>) => void }) {
+  const { toast } = useToast();
   const [tag, setTag] = useState('');
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     const list = tag.split(',').map((t) => t.trim()).filter(Boolean);
     if (!list.length) return;
-    set({ tags: [...draft.tags, ...list] });
-    setTag('');
+    const existing = new Set(draft.tags.map((t) => t.toLowerCase()));
+    const dupes: string[] = [];
+    const fresh: string[] = [];
+    for (const t of list) {
+      const key = t.toLowerCase();
+      if (existing.has(key) || fresh.some((f) => f.toLowerCase() === key)) dupes.push(t);
+      else fresh.push(t);
+    }
+    if (dupes.length) toast(`Already exists: ${dupes.join(', ')}`, 'err');
+    if (fresh.length) { set({ tags: [...draft.tags, ...fresh] }); setTag(''); }
   };
   const del = (i: number) => set({ tags: draft.tags.filter((_, idx) => idx !== i) });
   const pipi = draft.tags.length
