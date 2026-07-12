@@ -7,15 +7,50 @@ type Ctx = { register: (b: Blocker | null) => void; attempt: (navFn: () => void)
 const NavGuardCtx = createContext<Ctx>({ register: () => {}, attempt: (fn) => fn() });
 export const useNavGuard = () => useContext(NavGuardCtx);
 
-/** Pages call this with their dirty flag + a save() that resolves true on success. */
+/**
+ * Pages call this with their dirty flag + a save() that resolves true on success.
+ * Guards BOTH in-app navigation (sidebar/tabs/back-link) AND the browser
+ * back/forward buttons (via a history sentinel + popstate interception).
+ */
 export function useUnsavedChanges(dirty: boolean, save: () => Promise<boolean>) {
-  const { register } = useNavGuard();
+  const { register, attempt } = useNavGuard();
   const saveRef = useRef(save);
   saveRef.current = save;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const sentinelRef = useRef(false);
+
+  // register blocker for in-app navigation
   useEffect(() => {
     register({ dirty, save: () => saveRef.current() });
     return () => register(null);
   }, [dirty, register]);
+
+  // when edits appear, push a history "sentinel" so the browser Back button
+  // lands on us (fires popstate) instead of leaving the page immediately
+  useEffect(() => {
+    if (dirty && !sentinelRef.current) {
+      sentinelRef.current = true;
+      window.history.pushState(null, '', window.location.href);
+    }
+  }, [dirty]);
+
+  // intercept browser back / forward
+  useEffect(() => {
+    const onPop = () => {
+      if (dirtyRef.current) {
+        // stay put (re-arm the sentinel) and prompt Save / Exit
+        window.history.pushState(null, '', window.location.href);
+        attempt(() => { sentinelRef.current = false; window.history.go(-2); });
+      } else if (sentinelRef.current) {
+        // a leftover sentinel got consumed while clean — skip it so Back still works
+        sentinelRef.current = false;
+        window.history.go(-1);
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [attempt]);
 }
 
 export function NavGuardProvider({ children }: { children: React.ReactNode }) {
@@ -46,11 +81,11 @@ export function NavGuardProvider({ children }: { children: React.ReactNode }) {
     <NavGuardCtx.Provider value={{ register, attempt }}>
       {children}
       {pending && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="card p-6 w-full max-w-sm space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm px-4">
+          <div className="card p-6 w-full max-w-sm space-y-4 shadow-lift">
             <div>
-              <p className="text-lg font-bold text-ink">Unsaved changes</p>
-              <p className="text-sm text-gray-500 mt-1">You have changes that haven’t been saved yet. What would you like to do?</p>
+              <p className="text-lg font-extrabold text-ink">Unsaved changes</p>
+              <p className="text-sm font-medium text-muted mt-1">You have changes that haven’t been saved yet. What would you like to do?</p>
             </div>
             <div className="flex flex-col gap-2">
               <button className="btn btn-primary justify-center py-2.5" onClick={onSave} disabled={busy}>
