@@ -1,13 +1,17 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { api, upload, imgUrl } from '@/lib/api';
 import { StatTile, PendingBadge, SectionCard, EmptyState, ConfirmButton, Field, fmtMoney, fmtNum } from '@/components/ui';
 import { useToast } from '@/components/Toast';
+import { useNavGuard, useUnsavedChanges } from '@/components/NavGuard';
+
+const DAYS_OLD_OPTIONS = ['This Week', 'One Week', 'Two Weeks', '3 Weeks', '> 1 Month', '> 2 Months'];
+const AD_TYPE_OPTIONS = ['UGC', 'VSL', 'Hook', 'Testimonial', 'Unboxing', 'Demo', 'Founder Story', 'Problem/Solution', 'Listicle', 'Comparison', 'Meme', 'Static', 'Carousel', 'Explainer'];
 
 type Supplier = { name: string; phone: string };
-type AdLink = { url: string; label: string; impression: string; status: 'pending' | 'done'; created_at?: string };
+type AdLink = { url: string; label: string; impression: string; days_old: string; ad_type: string; status: 'pending' | 'done'; created_at?: string };
+type ProductLink = { url: string; label: string; price: string };
 type Comment = { body: string; created_at?: string };
 type Draft = {
   name: string;
@@ -15,10 +19,11 @@ type Draft = {
   sourcing_cost: string;
   mrp: string;
   amazon_rating: string;
-  image_path: string | null;
+  images: (string | null)[];   // 4 slots; [0] = main (required)
   suppliers: Supplier[];
   tags: string[];
   ad_links: AdLink[];
+  product_links: ProductLink[];
   comments: Comment[];
 };
 
@@ -28,10 +33,11 @@ const toDraft = (p: any): Draft => ({
   sourcing_cost: p.sourcing_cost == null ? '' : String(p.sourcing_cost),
   mrp: p.mrp == null ? '' : String(p.mrp),
   amazon_rating: p.amazon_rating == null ? '' : String(p.amazon_rating),
-  image_path: p.image_path ?? null,
+  images: [p.image_path ?? null, p.image_path_2 ?? null, p.image_path_3 ?? null, p.image_path_4 ?? null],
   suppliers: (p.suppliers || []).map((s: any) => ({ name: s.name || '', phone: s.phone || '' })),
   tags: (p.tags || []).map((t: any) => (typeof t === 'string' ? t : t.tag)),
-  ad_links: (p.ad_links || []).map((l: any) => ({ url: l.url, label: l.label || '', impression: l.impression == null ? '' : String(l.impression), status: l.status, created_at: l.created_at })),
+  ad_links: (p.ad_links || []).map((l: any) => ({ url: l.url, label: l.label || '', impression: l.impression == null ? '' : String(l.impression), days_old: l.days_old || '', ad_type: l.ad_type || '', status: l.status, created_at: l.created_at })),
+  product_links: (p.product_links || []).map((l: any) => ({ url: l.url, label: l.label || '', price: l.price == null ? '' : String(l.price) })),
   comments: (p.comments || []).map((c: any) => ({ body: c.body, created_at: c.created_at })),
 });
 
@@ -39,13 +45,15 @@ export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { toast } = useToast();
+  const { attempt } = useNavGuard();
+  const saveRef = useRef<() => Promise<boolean>>(async () => true);
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const snapshot = useRef<string>('');           // JSON of last-saved draft (for dirty check)
   const [saving, setSaving] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFiles, setImageFiles] = useState<(File | null)[]>([null, null, null, null]);
+  const [imagePreviews, setImagePreviews] = useState<(string | null)[]>([null, null, null, null]);
 
   const load = async () => {
     setLoadErr(null);
@@ -53,13 +61,13 @@ export default function ProductDetail() {
     const d = toDraft(p);
     setDraft(d);
     snapshot.current = JSON.stringify(d);
-    setImageFile(null); setImagePreview(null);
+    setImageFiles([null, null, null, null]); setImagePreviews([null, null, null, null]);
   };
   useEffect(() => { load().catch((e) => setLoadErr(e.message)); }, [id]); // eslint-disable-line
 
   const dirty = useMemo(
-    () => (draft ? JSON.stringify(draft) !== snapshot.current : false) || imageFile != null,
-    [draft, imageFile]
+    () => (draft ? JSON.stringify(draft) !== snapshot.current : false) || imageFiles.some(Boolean),
+    [draft, imageFiles]
   );
 
   // Warn before leaving (refresh/close) with unsaved changes
@@ -68,6 +76,9 @@ export default function ProductDetail() {
     window.addEventListener('beforeunload', h);
     return () => window.removeEventListener('beforeunload', h);
   }, [dirty]);
+
+  // Guard in-app navigation (sidebar/tabs/back) — prompt Save / Exit when dirty
+  useUnsavedChanges(dirty, () => saveRef.current());
 
   if (loadErr) return (
     <div className="max-w-md mx-auto mt-10 card p-6 text-center space-y-3">
@@ -81,27 +92,38 @@ export default function ProductDetail() {
 
   // ---- local mutators (NO backend calls) ----
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...(d as Draft), ...patch }));
-  const onPickImage = (file: File) => {
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+  const pickImage = (slot: number, file: File) => {
+    setImageFiles((a) => a.map((f, i) => (i === slot ? file : f)));
+    setImagePreviews((a) => a.map((p, i) => (i === slot ? URL.createObjectURL(file) : p)));
+  };
+  const removeImage = (slot: number) => {
+    setImageFiles((a) => a.map((f, i) => (i === slot ? null : f)));
+    setImagePreviews((a) => a.map((p, i) => (i === slot ? null : p)));
+    set({ images: (draft as Draft).images.map((p, i) => (i === slot ? null : p)) });
   };
 
   // ---- the ONLY function that talks to the backend for edits ----
-  const save = async () => {
+  const save = async (): Promise<boolean> => {
     const nm = draft.name.trim();
-    if (!nm) { toast('Name is required', 'err'); return; }
+    if (!nm) { toast('Name is required', 'err'); return false; }
+    if (!draft.images[0] && !imageFiles[0]) { toast('A main product image is required', 'err'); return false; }
     setSaving(true);
     try {
       // Duplicate product-name guard (against other active products)
       const all = await api('/api/products');
       if (all.some((x: any) => x.id !== Number(id) && (x.name || '').trim().toLowerCase() === nm.toLowerCase())) {
         toast('A product with this name already exists', 'err');
-        return;
+        return false;
       }
-      if (imageFile) {
-        const form = new FormData();
-        form.append('image', imageFile);
-        await upload(`/api/products/${id}/image`, form);
+      // Upload any newly-picked images, assemble the final 4-slot path array
+      const finalPaths = [...draft.images];
+      for (let i = 0; i < 4; i++) {
+        if (imageFiles[i]) {
+          const form = new FormData();
+          form.append('image', imageFiles[i] as File);
+          const { image_path } = await upload(`/api/products/${id}/image`, form);
+          finalPaths[i] = image_path;
+        }
       }
       await api(`/api/products/${id}/full`, {
         method: 'PUT',
@@ -111,20 +133,28 @@ export default function ProductDetail() {
           sourcing_cost: draft.sourcing_cost === '' ? null : Number(draft.sourcing_cost),
           mrp: draft.mrp === '' ? null : Number(draft.mrp),
           amazon_rating: draft.amazon_rating === '' ? null : Number(draft.amazon_rating),
+          image_path: finalPaths[0] || null,
+          image_path_2: finalPaths[1] || null,
+          image_path_3: finalPaths[2] || null,
+          image_path_4: finalPaths[3] || null,
           suppliers: draft.suppliers,
           tags: draft.tags,
-          ad_links: draft.ad_links.map((l) => ({ ...l, impression: l.impression === '' ? null : Number(l.impression) })),
+          ad_links: draft.ad_links.map((l) => ({ ...l, impression: l.impression === '' ? null : Number(l.impression), days_old: l.days_old || null, ad_type: l.ad_type || null })),
+          product_links: draft.product_links.map((l) => ({ url: l.url, label: l.label || null, price: l.price === '' ? null : Number(l.price) })),
           comments: draft.comments,
         }),
       });
       toast('Product saved ✓');
       await load();                 // pull fresh, resets dirty + gets server timestamps
+      return true;
     } catch (e: any) {
       toast(e.message, 'err');
+      return false;
     } finally {
       setSaving(false);
     }
   };
+  saveRef.current = save;   // keep the nav-guard pointed at the latest save
 
   const archive = async () => {
     try {
@@ -142,32 +172,43 @@ export default function ProductDetail() {
   const mrp = draft.mrp === '' ? null : Number(draft.mrp);
   const margin = sc != null && mrp != null ? mrp - sc : null;
   const marginPct = margin != null && mrp ? Math.round((margin / mrp) * 100) : null;
-  const shownImage = imagePreview || imgUrl(draft.image_path);
+  const slotImg = (i: number) => imagePreviews[i] || imgUrl(draft.images[i]);
 
   return (
     <div className="space-y-4 max-w-3xl pb-4">
       <div className="flex items-center justify-between gap-3">
-        <Link href="/products" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-ink">← Products</Link>
+        <button onClick={() => attempt(() => router.push('/products'))} className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-ink">← Products</button>
         {dirty && <span className="text-xs font-semibold text-pending bg-pending/10 px-2.5 py-1 rounded-full">● Unsaved changes</span>}
       </div>
 
       {/* Header */}
-      <div className="card p-4 sm:p-5">
-        <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-stretch sm:items-start">
-          <label className="w-full sm:w-44 h-44 sm:h-32 shrink-0 rounded-2xl bg-gray-100 overflow-hidden flex items-center justify-center cursor-pointer relative group">
-            {shownImage
-              ? <img src={shownImage} alt={draft.name} className="w-full h-full object-cover" />
-              : <span className="text-gray-400 text-xs text-center px-2 flex flex-col items-center gap-1"><span className="text-2xl">🖼️</span>Upload image</span>}
-            <input type="file" accept="image/*" className="hidden"
-              onChange={(e) => e.target.files?.[0] && onPickImage(e.target.files[0])} />
-            <span className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-medium transition">
-              {imageFile ? 'Image staged — Save to upload' : 'Replace image'}
-            </span>
-          </label>
-          <div className="flex-1 min-w-0 space-y-2.5">
-            <PendingBadge count={pending} />
-            <input className="input text-lg font-bold" placeholder="Product name"
-              value={draft.name} onChange={(e) => set({ name: e.target.value })} />
+      <div className="card p-4 sm:p-5 space-y-4">
+        <div className="space-y-2.5">
+          <PendingBadge count={pending} />
+          <input className="input text-lg font-bold" placeholder="Product name"
+            value={draft.name} onChange={(e) => set({ name: e.target.value })} />
+        </div>
+        <div>
+          <p className="section-title mb-2">Product images <span className="normal-case font-normal text-gray-400">— main required, up to 4</span></p>
+          <div className="grid grid-cols-4 gap-2 sm:gap-3">
+            {[0, 1, 2, 3].map((i) => {
+              const img = slotImg(i);
+              return (
+                <div key={i} className="relative aspect-square rounded-xl bg-gray-100 overflow-hidden group border border-gray-200">
+                  <label className="w-full h-full flex items-center justify-center cursor-pointer">
+                    {img
+                      ? <img src={img} alt="" className="w-full h-full object-cover" />
+                      : <span className="text-gray-400 text-[11px] text-center px-1 flex flex-col items-center gap-0.5"><span className="text-xl">🖼️</span>{i === 0 ? 'Main' : 'Add'}</span>}
+                    <input type="file" accept="image/*" className="hidden"
+                      onChange={(e) => e.target.files?.[0] && pickImage(i, e.target.files[0])} />
+                    {img && <span className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[11px] font-medium transition">Replace</span>}
+                  </label>
+                  {i === 0 && <span className="absolute bottom-1 left-1 bg-accent text-white text-[9px] font-bold px-1.5 py-0.5 rounded">MAIN</span>}
+                  {img && <button type="button" onClick={() => removeImage(i)}
+                    className="absolute top-1 right-1 w-5 h-5 grid place-items-center rounded-full bg-black/60 text-white text-xs hover:bg-danger" aria-label="Remove">✕</button>}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -223,6 +264,9 @@ export default function ProductDetail() {
       {/* Ad / creative links */}
       <AdLinksSection draft={draft} set={set} />
 
+      {/* Product page / competitor links */}
+      <ProductLinksSection draft={draft} set={set} />
+
       {/* Suppliers */}
       <SuppliersSection draft={draft} set={set} />
 
@@ -259,15 +303,19 @@ function AdLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>)
   const [url, setUrl] = useState('');
   const [label, setLabel] = useState('');
   const [impression, setImpression] = useState('');
+  const [daysOld, setDaysOld] = useState('');
+  const [types, setTypes] = useState<string[]>([]);
+  const toggleType = (t: string) => setTypes((a) => (a.includes(t) ? a.filter((x) => x !== t) : [...a, t]));
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     const u = url.trim();
     if (!u) return;
+    if (!types.length) { toast('Select at least one ad type', 'err'); return; }
     if (draft.ad_links.some((l) => l.url.trim().toLowerCase() === u.toLowerCase())) {
       toast('This link already exists', 'err'); return;
     }
-    set({ ad_links: [...draft.ad_links, { url: u, label: label.trim(), impression: impression.trim(), status: 'pending' }] });
-    setUrl(''); setLabel(''); setImpression('');
+    set({ ad_links: [...draft.ad_links, { url: u, label: label.trim(), impression: impression.trim(), days_old: daysOld, ad_type: types.join(', '), status: 'pending' }] });
+    setUrl(''); setLabel(''); setImpression(''); setDaysOld(''); setTypes([]);
   };
   const toggle = (i: number) => set({ ad_links: draft.ad_links.map((l, idx) => idx === i ? { ...l, status: l.status === 'pending' ? 'done' : 'pending' } : l) });
   const del = (i: number) => set({ ad_links: draft.ad_links.filter((_, idx) => idx !== i) });
@@ -279,21 +327,90 @@ function AdLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>)
       <div className="space-y-2 mb-3">
         {draft.ad_links.length === 0 && <EmptyState>No links yet — add creatives to review.</EmptyState>}
         {draft.ad_links.map((l, i) => (
-          <div key={i} className="item-box">
+          <div key={i} className="item-box flex-wrap">
             <button type="button" onClick={() => toggle(i)}
               className={`btn btn-sm shrink-0 ${l.status === 'done' ? 'bg-done/10 text-done' : 'bg-pending/10 text-pending'}`}>
               {l.status === 'done' ? '✓ Done' : '● Pending'}
             </button>
             <a href={l.url} target="_blank" rel="noreferrer" className="text-sm text-accent hover:underline truncate flex-1 min-w-0">{l.label || l.url}</a>
+            {l.ad_type && <span className="text-[11px] shrink-0 whitespace-nowrap bg-accent/10 text-accent rounded-full px-2 py-0.5 font-medium" title="Ad type">{l.ad_type}</span>}
+            {l.days_old && <span className="text-[11px] shrink-0 whitespace-nowrap bg-gray-100 text-gray-600 rounded-full px-2 py-0.5" title="Ad age">🗓 {l.days_old}</span>}
             {l.impression !== '' && <span className="text-xs text-gray-500 shrink-0 whitespace-nowrap" title="Impressions">👁 {fmtNum(Number(l.impression))}</span>}
             <button type="button" onClick={() => del(i)} className="icon-x" aria-label="Delete">✕</button>
           </div>
         ))}
       </div>
+      <form onSubmit={add} className="rounded-xl border border-gray-200 bg-gray-50/60 p-2 space-y-2">
+        <div className="flex gap-2 flex-wrap">
+          <input className="input flex-1 min-w-[150px] bg-white" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} />
+          <input className="input w-24 bg-white" placeholder="Label" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <input className="input w-24 bg-white" type="number" placeholder="Impressions" value={impression} onChange={(e) => setImpression(e.target.value)} />
+          <select className="input w-32 bg-white" value={daysOld} onChange={(e) => setDaysOld(e.target.value)} title="Days old">
+            <option value="">Days old…</option>
+            {DAYS_OLD_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold text-gray-500 mb-1">Ad type <span className="text-danger">*</span> (pick one or more)</p>
+          <div className="flex flex-wrap gap-1.5">
+            {AD_TYPE_OPTIONS.map((t) => {
+              const on = types.includes(t);
+              return (
+                <button type="button" key={t} onClick={() => toggleType(t)}
+                  className={`text-xs px-2.5 py-1 rounded-lg border transition ${on ? 'bg-accent text-white border-accent' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
+                  {on ? '✓ ' : ''}{t}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <button className="btn btn-primary shrink-0">Add link</button>
+        </div>
+      </form>
+    </SectionCard>
+  );
+}
+
+/* ---------------- Product page / competitor links (local) ---------------- */
+function ProductLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>) => void }) {
+  const { toast } = useToast();
+  const [url, setUrl] = useState('');
+  const [label, setLabel] = useState('');
+  const [price, setPrice] = useState('');
+  const add = (e: React.FormEvent) => {
+    e.preventDefault();
+    const u = url.trim();
+    if (!u) return;
+    if (draft.product_links.some((l) => l.url.trim().toLowerCase() === u.toLowerCase())) {
+      toast('This link already exists', 'err'); return;
+    }
+    set({ product_links: [...draft.product_links, { url: u, label: label.trim(), price: price.trim() }] });
+    setUrl(''); setLabel(''); setPrice('');
+  };
+  const del = (i: number) => set({ product_links: draft.product_links.filter((_, idx) => idx !== i) });
+  const nums = draft.product_links.map((l) => (l.price === '' ? NaN : Number(l.price))).filter((n) => !isNaN(n));
+  const avg = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+  return (
+    <SectionCard title="Product page links & prices" icon="🔗"
+      action={avg != null ? <span className="text-xs text-gray-400">avg {fmtMoney(Math.round(avg))} · {nums.length} priced</span> : undefined}>
+      <div className="space-y-2 mb-3">
+        {draft.product_links.length === 0 && <EmptyState>No product/competitor links yet — add pages with their listed price.</EmptyState>}
+        {draft.product_links.map((l, i) => (
+          <div key={i} className="item-box">
+            <a href={l.url} target="_blank" rel="noreferrer" className="text-sm text-accent hover:underline truncate flex-1 min-w-0">{l.label || l.url}</a>
+            {l.price !== '' && <span className="text-sm font-semibold text-ink shrink-0 whitespace-nowrap">{fmtMoney(Number(l.price))}</span>}
+            <button type="button" onClick={() => del(i)} className="icon-x" aria-label="Delete">✕</button>
+          </div>
+        ))}
+      </div>
       <form onSubmit={add} className="rounded-xl border border-gray-200 bg-gray-50/60 p-2 flex gap-2 flex-wrap">
-        <input className="input flex-1 min-w-[150px] bg-white" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} />
-        <input className="input w-28 bg-white" placeholder="Label" value={label} onChange={(e) => setLabel(e.target.value)} />
-        <input className="input w-28 bg-white" type="number" placeholder="Impressions" value={impression} onChange={(e) => setImpression(e.target.value)} />
+        <input className="input flex-1 min-w-[150px] bg-white" placeholder="https://… (Amazon, competitor, etc.)" value={url} onChange={(e) => setUrl(e.target.value)} />
+        <input className="input w-24 bg-white" placeholder="Label" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <div className="relative w-28">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₹</span>
+          <input className="input pl-7 bg-white" type="number" placeholder="Price" value={price} onChange={(e) => setPrice(e.target.value)} />
+        </div>
         <button className="btn btn-primary shrink-0">Add link</button>
       </form>
     </SectionCard>

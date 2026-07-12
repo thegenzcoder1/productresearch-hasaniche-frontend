@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, imgUrl } from '@/lib/api';
 import { EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
+import { useUnsavedChanges } from '@/components/NavGuard';
 
 type Action = null | 'restore' | 'delete';
 type Arch = { id: number; name: string; image_path: string | null; days_left: number; action: Action };
@@ -36,8 +37,8 @@ export default function ArchivePage() {
     setItems((prev) => (prev || []).map((i) => (i.id === id ? { ...i, action } : i)));
 
   // Save: the ONLY backend write
-  const save = async () => {
-    if (!items) return;
+  const save = async (): Promise<boolean> => {
+    if (!items) return false;
     setSaving(true);
     try {
       for (const it of items) {
@@ -48,9 +49,12 @@ export default function ArchivePage() {
       const d = staged.filter((s) => s.action === 'delete').length;
       toast(`Saved — ${r} restored, ${d} deleted`);
       await load();
-    } catch (e: any) { toast(e.message, 'err'); }
+      return true;
+    } catch (e: any) { toast(e.message, 'err'); return false; }
     finally { setSaving(false); }
   };
+
+  useUnsavedChanges(dirty, save);
 
   if (loadErr) return (
     <div className="max-w-md mx-auto mt-10 card p-6 text-center space-y-3">

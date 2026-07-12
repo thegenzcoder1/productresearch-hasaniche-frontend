@@ -3,7 +3,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, imgUrl } from '@/lib/api';
 import { StatTile, Field, fmtNum, fmtMoney, EmptyState } from '@/components/ui';
 import { useToast } from '@/components/Toast';
+import { useUnsavedChanges } from '@/components/NavGuard';
 
+type PLink = { url: string; label: string | null; price: number | null };
 type Item = {
   id: number;
   name: string;
@@ -12,10 +14,12 @@ type Item = {
   sourcing_cost: string;
   mrp: string;
   amazon_sold_last_month: string;
+  amazon_avg_price: string;
   ad_angles: string[];
   // read-only signals (from backend, not editable here)
   total_impressions: number;
   amazon_rating: number | null;
+  product_links: PLink[];
 };
 
 const toItem = (p: any): Item => ({
@@ -26,9 +30,11 @@ const toItem = (p: any): Item => ({
   sourcing_cost: p.sourcing_cost == null ? '' : String(p.sourcing_cost),
   mrp: p.mrp == null ? '' : String(p.mrp),
   amazon_sold_last_month: p.amazon_sold_last_month == null ? '' : String(p.amazon_sold_last_month),
+  amazon_avg_price: p.amazon_avg_price == null ? '' : String(p.amazon_avg_price),
   ad_angles: p.ad_angles || [],
   total_impressions: Number(p.total_impressions || 0),
   amazon_rating: p.amazon_rating == null ? null : Number(p.amazon_rating),
+  product_links: (p.product_links || []).map((l: any) => ({ url: l.url, label: l.label ?? null, price: l.price == null ? null : Number(l.price) })),
 });
 
 export default function RankingPage() {
@@ -85,8 +91,8 @@ export default function RankingPage() {
   };
 
   // ---- Save: the ONLY backend write ----
-  const save = async () => {
-    if (!items) return;
+  const save = async (): Promise<boolean> => {
+    if (!items) return false;
     setSaving(true);
     try {
       const orig = JSON.parse(snapshot.current) as Item[];
@@ -101,6 +107,7 @@ export default function RankingPage() {
               sourcing_cost: it.sourcing_cost === '' ? null : Number(it.sourcing_cost),
               mrp: it.mrp === '' ? null : Number(it.mrp),
               amazon_sold_last_month: it.amazon_sold_last_month === '' ? null : Number(it.amazon_sold_last_month),
+              amazon_avg_price: it.amazon_avg_price === '' ? null : Number(it.amazon_avg_price),
               ad_angles: it.ad_angles,
             }),
           });
@@ -113,9 +120,12 @@ export default function RankingPage() {
       }
       toast('Ranking saved ✓');
       await load();
-    } catch (e: any) { toast(e.message, 'err'); }
+      return true;
+    } catch (e: any) { toast(e.message, 'err'); return false; }
     finally { setSaving(false); }
   };
+
+  useUnsavedChanges(dirty, save);
 
   if (loadErr) return (
     <div className="max-w-md mx-auto mt-10 card p-6 text-center space-y-3">
@@ -171,6 +181,7 @@ export default function RankingPage() {
                       <span title="Ad angles">🎯 {p.ad_angles.length}</span>
                       <span title="Amazon sold / month">🛒 {fmtNum(p.amazon_sold_last_month === '' ? null : Number(p.amazon_sold_last_month))}</span>
                       <span title="Impressions (summed from ad links)">👁 {fmtNum(p.total_impressions)}</span>
+                      {p.amazon_avg_price !== '' && <span title="Average Amazon price">🅰 {fmtMoney(Number(p.amazon_avg_price))}</span>}
                       {p.amazon_rating != null && <span title="Amazon rating" className="text-amber-500">⭐ {p.amazon_rating.toFixed(1)}</span>}
                     </div>
                   </div>
@@ -191,7 +202,7 @@ export default function RankingPage() {
                       <StatTile label="Margin" value={margin == null ? '—' : fmtMoney(margin)} sub={marginPct == null ? undefined : `${marginPct}%`} tone={margin == null ? 'default' : margin >= 0 ? 'good' : 'bad'} />
                       <StatTile label="Amazon / mo" value={fmtNum(p.amazon_sold_last_month === '' ? null : Number(p.amazon_sold_last_month))} />
                       <StatTile label="Impressions" value={fmtNum(p.total_impressions)} sub="from ad links" />
-                      <StatTile label="Amazon rating" value={p.amazon_rating == null ? '—' : `${p.amazon_rating.toFixed(1)} ★`} />
+                      <StatTile label="Avg Amazon price" value={p.amazon_avg_price === '' ? '—' : fmtMoney(Number(p.amazon_avg_price))} />
                     </div>
 
                     <Field label="Pain point / problem solved">
@@ -218,10 +229,40 @@ export default function RankingPage() {
                         <input className="input" type="number" placeholder="e.g. 12000"
                           value={p.amazon_sold_last_month} onChange={(e) => setField(p.id, 'amazon_sold_last_month', e.target.value)} />
                       </Field>
+                      <Field label="Average Amazon price">
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₹</span>
+                          <input className="input pl-8" type="number" inputMode="decimal" placeholder="0"
+                            value={p.amazon_avg_price} onChange={(e) => setField(p.id, 'amazon_avg_price', e.target.value)} />
+                        </div>
+                      </Field>
                     </div>
                     <p className="text-xs text-gray-400">
                       👁 Impressions ({fmtNum(p.total_impressions)}) are summed automatically from this product’s ad-link impressions — edit them on the product page.
                     </p>
+
+                    {/* Product page links & prices (read-only here — edit on the product page) */}
+                    <div>
+                      <label className="section-title block mb-1.5">Product page links & prices <span className="normal-case font-normal text-gray-400">— for price assumption</span></label>
+                      {p.product_links.length === 0 ? (
+                        <EmptyState>No product/competitor links yet — add them on the product page.</EmptyState>
+                      ) : (
+                        <div className="space-y-2">
+                          {p.product_links.map((l, idx) => (
+                            <div key={idx} className="item-box">
+                              <a href={l.url} target="_blank" rel="noreferrer" className="text-sm text-accent hover:underline truncate flex-1 min-w-0">{l.label || l.url}</a>
+                              {l.price != null && <span className="text-sm font-semibold text-ink shrink-0">{fmtMoney(l.price)}</span>}
+                            </div>
+                          ))}
+                          {(() => {
+                            const nums = p.product_links.map((l) => l.price).filter((n): n is number => n != null);
+                            if (!nums.length) return null;
+                            const avg = Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
+                            return <p className="text-xs text-gray-500 pt-0.5">Avg competitor price: <span className="font-semibold text-ink">{fmtMoney(avg)}</span> · range {fmtMoney(Math.min(...nums))}–{fmtMoney(Math.max(...nums))}</p>;
+                          })()}
+                        </div>
+                      )}
+                    </div>
 
                     <AdAngles angles={p.ad_angles} onChange={(next) => setField(p.id, 'ad_angles', next)} />
                   </div>
