@@ -141,8 +141,8 @@ export default function RankingPage() {
     <div className="space-y-5 max-w-3xl pb-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-ink">Ranking</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Reorder with ▲▼ or drag, and edit fields. Nothing saves until you tap Save.</p>
+          <h1 className="text-3xl font-extrabold text-ink tracking-tight">Ranking</h1>
+          <p className="text-sm font-medium text-muted mt-1">Reorder with ▲▼ or drag, and edit fields. Nothing saves until you tap Save.</p>
         </div>
         {dirty && <span className="shrink-0 text-xs font-semibold text-pending bg-pending/10 px-2.5 py-1 rounded-full">● Unsaved</span>}
       </div>

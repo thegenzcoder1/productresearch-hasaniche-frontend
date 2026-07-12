@@ -69,8 +69,8 @@ export default function ArchivePage() {
     <div className="space-y-5 pb-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-ink">Archive</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Stage restores/deletes here — they only take effect when you tap Save. Purged 7 days after deletion.</p>
+          <h1 className="text-3xl font-extrabold text-ink tracking-tight">Archive</h1>
+          <p className="text-sm font-medium text-muted mt-1">Stage restores/deletes here — they only take effect when you tap Save. Purged 7 days after deletion.</p>
         </div>
         {dirty && <span className="shrink-0 text-xs font-semibold text-pending bg-pending/10 px-2.5 py-1 rounded-full">● {staged.length} staged</span>}
       </div>

@@ -30,20 +30,24 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <form onSubmit={submit} className="card p-8 w-full max-w-sm space-y-5">
-        <div>
-          <h1 className="text-xl font-bold text-ink">Product Research</h1>
-          <p className="text-sm text-gray-500">Sign in to continue</p>
+      <form onSubmit={submit} className="card p-8 w-full max-w-sm space-y-6 shadow-lift">
+        <div className="text-center space-y-3">
+          <div className="w-14 h-14 mx-auto rounded-2xl grid place-items-center text-white font-black text-2xl shadow-glow
+                          bg-[linear-gradient(135deg,#6366f1,#8b5cf6)]">P</div>
+          <div>
+            <h1 className="text-xl font-extrabold text-ink">Product Research</h1>
+            <p className="text-sm font-medium text-muted">Sign in to your workspace</p>
+          </div>
         </div>
-        {err && <div className="text-sm text-danger bg-danger/10 rounded-lg px-3 py-2">{err}</div>}
+        {err && <div className="text-sm font-medium text-danger bg-danger/10 rounded-xl px-3 py-2.5 text-center">{err}</div>}
         <div className="space-y-3">
           <input className="input" placeholder="Username" value={username}
             onChange={(e) => setUsername(e.target.value)} autoFocus />
           <input className="input" type="password" placeholder="Password" value={password}
             onChange={(e) => setPassword(e.target.value)} />
         </div>
-        <button className="btn btn-primary w-full justify-center py-2" disabled={loading}>
-          {loading ? 'Signing in…' : 'Sign in'}
+        <button className="btn btn-primary w-full justify-center py-3 text-base" disabled={loading}>
+          {loading ? 'Signing in…' : 'Sign in →'}
         </button>
       </form>
     </div>

@@ -2,57 +2,74 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light;
-  --ring: 13 148 136;
+:root { color-scheme: light; }
+
+html {
+  font-size: 16px;                 /* base; inputs use >=16px so mobile never zooms */
+  -webkit-text-size-adjust: 100%;
 }
 
 html, body {
-  background: #f4f5f7;
-  color: #1f2430;
+  background:
+    radial-gradient(1200px 600px at 100% -5%, rgba(99,102,241,0.10), transparent 60%),
+    radial-gradient(1000px 500px at -10% 110%, rgba(139,92,246,0.10), transparent 55%),
+    #eef1f6;
+  background-attachment: fixed;
+  color: #334155;                  /* bold gray body text */
+  font-weight: 500;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.006em;
 }
+
+h1, h2, h3 { color: #0f172a; font-weight: 700; letter-spacing: -0.02em; }
 
 @layer components {
   .section-title {
-    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400;
+    @apply text-xs font-bold uppercase tracking-[0.09em] text-slate-500;
   }
 
+  /* Cards */
   .card {
-    @apply bg-white rounded-2xl border border-gray-200/80 shadow-[0_1px_2px_rgba(16,24,40,0.04)];
+    @apply bg-white rounded-2xl border border-slate-200/70 shadow-card;
   }
+  .card-hover { @apply transition duration-200 hover:shadow-lift hover:-translate-y-0.5; }
 
   /* Buttons */
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold
-           transition-all duration-150 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[15px] font-semibold
+           transition-all duration-150 active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none;
   }
-  .btn-primary { @apply bg-accent text-white shadow-sm hover:bg-teal-700; }
-  .btn-ghost   { @apply text-gray-600 hover:bg-gray-100; }
+  .btn-primary {
+    @apply text-white shadow-glow;
+    background-image: linear-gradient(135deg, #6366f1, #7c3aed);
+  }
+  .btn-primary:hover { filter: brightness(1.07); }
+  .btn-ghost   { @apply text-slate-600 hover:bg-slate-100; }
   .btn-danger  { @apply bg-danger text-white shadow-sm hover:bg-red-600; }
-  .btn-soft    { @apply bg-gray-100 text-gray-700 hover:bg-gray-200; }
-  .btn-sm      { @apply px-2.5 py-1.5 text-xs rounded-lg; }
+  .btn-soft    { @apply bg-slate-100 text-slate-700 hover:bg-slate-200; }
+  .btn-sm      { @apply px-3 py-1.5 text-[13px] rounded-lg; }
 
-  /* Inputs */
+  /* Inputs — 16px min so iOS/Android never auto-zoom on focus */
   .input {
-    @apply w-full px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white text-sm text-ink
-           placeholder:text-gray-400 transition
-           focus:outline-none focus:ring-4 focus:ring-accent/15 focus:border-accent;
+    @apply w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-base font-medium text-ink
+           placeholder:text-slate-400 placeholder:font-normal transition
+           focus:outline-none focus:ring-4 focus:ring-accent/20 focus:border-accent;
   }
+  select.input { @apply pr-8; }
 
   /* Boxed list row */
   .item-box {
-    @apply flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5
-           transition hover:border-gray-300 hover:shadow-[0_1px_3px_rgba(16,24,40,0.06)];
+    @apply flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5
+           transition hover:border-slate-300 hover:shadow-card;
   }
 
   .empty-box {
-    @apply rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-5
-           text-center text-sm text-gray-400;
+    @apply rounded-xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-6
+           text-center text-sm font-medium text-slate-400;
   }
 
   .icon-x {
-    @apply grid place-items-center w-7 h-7 rounded-lg text-gray-300 hover:text-danger hover:bg-danger/10 transition shrink-0;
+    @apply grid place-items-center w-7 h-7 rounded-lg text-slate-300 hover:text-danger hover:bg-danger/10 transition shrink-0;
   }
 }

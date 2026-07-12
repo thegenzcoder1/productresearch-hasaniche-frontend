@@ -51,8 +51,8 @@ export default function ProductsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-ink">Products</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{products.length} in research</p>
+          <h1 className="text-3xl font-extrabold text-ink tracking-tight">Products</h1>
+          <p className="text-sm font-medium text-muted mt-1">{products.length} in research</p>
         </div>
         <button className="btn btn-primary" onClick={() => setCreating((v) => !v)}>+ New product</button>
       </div>
@@ -76,30 +76,30 @@ export default function ProductsPage() {
           {filtered.map((p) => {
             const margin = p.mrp != null && p.sourcing_cost != null ? Number(p.mrp) - Number(p.sourcing_cost) : null;
             return (
-              <Link key={p.id} href={`/products/${p.id}`} className="card p-4 hover:shadow-md hover:border-gray-300 transition block">
-                <div className="aspect-video rounded-xl bg-gray-100 mb-3 overflow-hidden flex items-center justify-center">
+              <Link key={p.id} href={`/products/${p.id}`} className="card card-hover p-4 block">
+                <div className="aspect-video rounded-xl bg-gradient-to-br from-slate-100 to-slate-200/60 mb-3 overflow-hidden flex items-center justify-center">
                   {p.image_path
                     ? <img src={imgUrl(p.image_path)!} alt={p.name} className="w-full h-full object-cover" />
-                    : <span className="text-gray-300 text-sm">No image</span>}
+                    : <span className="text-slate-300 text-2xl">🖼️</span>}
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-semibold text-ink truncate">{p.name}</h3>
+                  <h3 className="font-bold text-ink truncate">{p.name}</h3>
                   <PendingBadge count={p.pending_ads} />
                 </div>
                 {(p.mrp != null || margin != null) && (
-                  <div className="flex items-center gap-2 mt-2 text-xs">
-                    {p.mrp != null && <span className="font-semibold text-ink">{fmtMoney(p.mrp)}</span>}
+                  <div className="flex items-center gap-2 mt-2 text-sm">
+                    {p.mrp != null && <span className="font-extrabold text-ink">{fmtMoney(p.mrp)}</span>}
                     {margin != null && (
-                      <span className={`font-medium ${margin >= 0 ? 'text-done' : 'text-danger'}`}>
+                      <span className={`font-bold ${margin >= 0 ? 'text-done' : 'text-danger'}`}>
                         {margin >= 0 ? '+' : ''}{fmtMoney(margin)} margin
                       </span>
                     )}
                   </div>
                 )}
                 {p.tags?.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
+                  <div className="flex flex-wrap gap-1 mt-2.5">
                     {p.tags.slice(0, 5).map((t, i) => (
-                      <span key={i} className="text-xs bg-gray-100 text-gray-600 rounded-md px-2 py-0.5">{t}</span>
+                      <span key={i} className="text-xs font-semibold bg-indigo-50 text-accent-dark rounded-md px-2 py-0.5">{t}</span>
                     ))}
                   </div>
                 )}

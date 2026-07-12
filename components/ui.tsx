@@ -25,11 +25,11 @@ export function PendingBadge({ count }: { count: number }) {
   const zero = count === 0;
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
-        zero ? 'bg-done/10 text-done' : 'bg-pending/10 text-pending'
+      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-bold ring-1 ${
+        zero ? 'bg-done/10 text-done ring-done/20' : 'bg-pending/10 text-pending ring-pending/20'
       }`}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${zero ? 'bg-done' : 'bg-pending'}`} />
+      <span className={`w-1.5 h-1.5 rounded-full ${zero ? 'bg-done' : 'bg-pending animate-pulse'}`} />
       {zero ? 'All ads done' : `${count} ad${count === 1 ? '' : 's'} pending`}
     </span>
   );
@@ -41,16 +41,16 @@ export function StatTile({ label, value, tone = 'default', sub }: {
   tone?: 'default' | 'accent' | 'good' | 'bad';
 }) {
   const tones = {
-    default: 'bg-gray-50 border-gray-200 text-ink',
-    accent: 'bg-accent/5 border-accent/20 text-accent',
-    good: 'bg-done/5 border-done/20 text-done',
-    bad: 'bg-danger/5 border-danger/20 text-danger',
+    default: 'from-slate-50 to-slate-100/60 border-slate-200 text-ink',
+    accent: 'from-indigo-50 to-violet-50 border-indigo-200/70 text-accent-dark',
+    good: 'from-emerald-50 to-teal-50 border-emerald-200/70 text-done',
+    bad: 'from-rose-50 to-red-50 border-rose-200/70 text-danger',
   }[tone];
   return (
-    <div className={`rounded-xl border px-3.5 py-2.5 ${tones}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60">{label}</p>
-      <p className="text-lg font-bold leading-tight mt-0.5">{value}</p>
-      {sub != null && <p className="text-[11px] opacity-70 mt-0.5">{sub}</p>}
+    <div className={`rounded-2xl border px-4 py-3 bg-gradient-to-br ${tones}`}>
+      <p className="text-[10px] font-bold uppercase tracking-wider opacity-60">{label}</p>
+      <p className="text-xl font-extrabold leading-tight mt-1">{value}</p>
+      {sub != null && <p className="text-[11px] font-medium opacity-70 mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -61,10 +61,10 @@ export function SectionCard({ title, icon, action, children }: {
 }) {
   return (
     <section className="card p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="section-title flex items-center gap-1.5">
-          {icon && <span className="text-gray-400">{icon}</span>}
-          {title}
+      <div className="flex items-center justify-between mb-4 gap-2">
+        <h3 className="flex items-center gap-2.5">
+          {icon && <span className="w-8 h-8 rounded-xl grid place-items-center text-base bg-slate-100 shrink-0">{icon}</span>}
+          <span className="text-[15px] font-bold text-ink">{title}</span>
         </h3>
         {action}
       </div>
