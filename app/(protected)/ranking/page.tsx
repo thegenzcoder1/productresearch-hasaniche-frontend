@@ -164,7 +164,7 @@ export default function RankingPage() {
                 <div className="flex items-center gap-3 p-3">
                   <span className="cursor-grab text-gray-300 select-none hidden sm:block" title="Drag to reorder">⠿</span>
                   <span className="grid place-items-center w-8 h-8 rounded-lg bg-accent/10 text-accent font-bold text-sm shrink-0">{i + 1}</span>
-                  <div className="w-14 h-11 rounded-lg bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                  <div className="w-10 h-16 rounded-lg bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
                     {p.image_path
                       ? <img src={imgUrl(p.image_path)!} alt="" className="w-full h-full object-cover" />
                       : <span className="text-gray-300 text-xs">—</span>}

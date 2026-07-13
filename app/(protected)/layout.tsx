@@ -7,6 +7,7 @@ import { NavGuardProvider, useNavGuard } from '@/components/NavGuard';
 const nav = [
   { href: '/products', label: 'Products', icon: '📦' },
   { href: '/ranking', label: 'Ranking', icon: '📊' },
+  { href: '/pending', label: 'Pending', icon: '⏳' },
   { href: '/archive', label: 'Archive', icon: '🗄️' },
 ];
 

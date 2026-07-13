@@ -77,7 +77,7 @@ export default function ProductsPage() {
             const margin = p.mrp != null && p.sourcing_cost != null ? Number(p.mrp) - Number(p.sourcing_cost) : null;
             return (
               <Link key={p.id} href={`/products/${p.id}`} className="card card-hover p-4 block">
-                <div className="aspect-video rounded-xl bg-gradient-to-br from-slate-100 to-slate-200/60 mb-3 overflow-hidden flex items-center justify-center">
+                <div className="aspect-[9/16] max-h-72 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200/60 mb-3 overflow-hidden flex items-center justify-center">
                   {p.image_path
                     ? <img src={imgUrl(p.image_path)!} alt={p.name} className="w-full h-full object-cover" />
                     : <span className="text-slate-300 text-2xl">🖼️</span>}

@@ -54,6 +54,7 @@ export default function ProductDetail() {
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [imageFiles, setImageFiles] = useState<(File | null)[]>([null, null, null, null]);
   const [imagePreviews, setImagePreviews] = useState<(string | null)[]>([null, null, null, null]);
+  const [lightbox, setLightbox] = useState<string | null>(null);
 
   const load = async () => {
     setLoadErr(null);
@@ -189,29 +190,46 @@ export default function ProductDetail() {
             value={draft.name} onChange={(e) => set({ name: e.target.value })} />
         </div>
         <div>
-          <p className="section-title mb-2">Product images <span className="normal-case font-normal text-gray-400">— main required, up to 4</span></p>
+          <p className="section-title mb-2">Product images <span className="normal-case font-normal text-gray-400">— main required, up to 4 · double-click to view full</span></p>
           <div className="grid grid-cols-4 gap-2 sm:gap-3">
             {[0, 1, 2, 3].map((i) => {
               const img = slotImg(i);
               return (
-                <div key={i} className="relative aspect-square rounded-xl bg-gray-100 overflow-hidden group border border-gray-200">
-                  <label className="w-full h-full flex items-center justify-center cursor-pointer">
-                    {img
-                      ? <img src={img} alt="" className="w-full h-full object-cover" />
-                      : <span className="text-gray-400 text-[11px] text-center px-1 flex flex-col items-center gap-0.5"><span className="text-xl">🖼️</span>{i === 0 ? 'Main' : 'Add'}</span>}
-                    <input type="file" accept="image/*" className="hidden"
-                      onChange={(e) => e.target.files?.[0] && pickImage(i, e.target.files[0])} />
-                    {img && <span className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[11px] font-medium transition">Replace</span>}
-                  </label>
+                <div key={i} className="relative aspect-[9/16] rounded-xl bg-gray-100 overflow-hidden group border border-gray-200">
+                  {img ? (
+                    <>
+                      <img src={img} alt="" className="w-full h-full object-cover cursor-zoom-in"
+                        onDoubleClick={() => setLightbox(img)} title="Double-click to view full" />
+                      <label className="absolute inset-x-0 bottom-0 bg-black/55 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[11px] font-medium py-1.5 cursor-pointer transition">
+                        Replace
+                        <input type="file" accept="image/*" className="hidden"
+                          onChange={(e) => e.target.files?.[0] && pickImage(i, e.target.files[0])} />
+                      </label>
+                      <button type="button" onClick={() => removeImage(i)}
+                        className="absolute top-1 right-1 w-5 h-5 grid place-items-center rounded-full bg-black/60 text-white text-xs hover:bg-danger" aria-label="Remove">✕</button>
+                    </>
+                  ) : (
+                    <label className="w-full h-full flex items-center justify-center cursor-pointer">
+                      <span className="text-gray-400 text-[11px] text-center px-1 flex flex-col items-center gap-0.5"><span className="text-xl">🖼️</span>{i === 0 ? 'Main' : 'Add'}</span>
+                      <input type="file" accept="image/*" className="hidden"
+                        onChange={(e) => e.target.files?.[0] && pickImage(i, e.target.files[0])} />
+                    </label>
+                  )}
                   {i === 0 && <span className="absolute bottom-1 left-1 bg-accent text-white text-[9px] font-bold px-1.5 py-0.5 rounded">MAIN</span>}
-                  {img && <button type="button" onClick={() => removeImage(i)}
-                    className="absolute top-1 right-1 w-5 h-5 grid place-items-center rounded-full bg-black/60 text-white text-xs hover:bg-danger" aria-label="Remove">✕</button>}
                 </div>
               );
             })}
           </div>
         </div>
       </div>
+
+      {/* Fullscreen image viewer */}
+      {lightbox && (
+        <div className="fixed inset-0 z-[60] bg-black/85 flex items-center justify-center p-4 cursor-zoom-out" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="" className="max-h-full max-w-full object-contain rounded-lg shadow-2xl" />
+          <button type="button" className="absolute top-4 right-4 w-10 h-10 grid place-items-center rounded-full bg-white/15 text-white text-xl hover:bg-white/25" aria-label="Close">✕</button>
+        </div>
+      )}
 
       {/* Pricing */}
       <SectionCard title="Pricing & margin" icon="💰">
@@ -276,16 +294,6 @@ export default function ProductDetail() {
       {/* Comments */}
       <CommentsSection draft={draft} set={set} />
 
-      {/* Save bar */}
-      <div className="card p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-accent/30">
-        <p className="text-sm text-gray-500">
-          {dirty ? 'You have unsaved changes — nothing is sent to the server until you save.' : 'All changes saved.'}
-        </p>
-        <button className="btn btn-primary px-6 py-2.5 w-full sm:w-auto justify-center" onClick={save} disabled={saving || !dirty}>
-          {saving ? 'Saving…' : dirty ? '💾 Save product' : '✓ Saved'}
-        </button>
-      </div>
-
       {/* Danger zone */}
       <SectionCard title="Danger zone" icon="⚠️">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -293,19 +301,62 @@ export default function ProductDetail() {
           <ConfirmButton label="Archive product" confirmLabel="Yes, archive" onConfirm={archive} />
         </div>
       </SectionCard>
+
+      {/* Sticky Save bar — stays visible while scrolling so nobody forgets to save.
+          The bar is pointer-events-none so it never blocks clicks on content behind it;
+          only the Save button is interactive. */}
+      <div className="sticky bottom-20 md:bottom-4 z-20 pointer-events-none">
+        <div className={`card p-3 sm:p-4 flex items-center justify-between gap-3 shadow-lift border-2 ${dirty ? 'border-accent/50' : 'border-slate-200'}`}>
+          <p className="text-sm font-semibold hidden sm:block">
+            {dirty ? <span className="text-pending">● Unsaved changes</span> : <span className="text-done">✓ All changes saved</span>}
+          </p>
+          <p className="text-sm font-semibold sm:hidden">{dirty ? <span className="text-pending">● Unsaved</span> : <span className="text-done">✓ Saved</span>}</p>
+          <button className="btn btn-primary px-6 py-2.5 justify-center pointer-events-auto" onClick={save} disabled={saving || !dirty}>
+            {saving ? 'Saving…' : dirty ? '💾 Save product' : '✓ Saved'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-/* ---------------- Ad links (local) ---------------- */
+/* Reusable ad-type checkbox group */
+function AdTypePicker({ selected, onToggle }: { selected: string[]; onToggle: (t: string) => void }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold text-gray-500 mb-1">Ad type <span className="text-danger">*</span> (pick one or more)</p>
+      <div className="flex flex-wrap gap-1.5">
+        {AD_TYPE_OPTIONS.map((t) => {
+          const on = selected.includes(t);
+          return (
+            <button type="button" key={t} onClick={() => onToggle(t)}
+              className={`text-xs px-2.5 py-1 rounded-lg border transition ${on ? 'bg-accent text-white border-accent' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
+              {on ? '✓ ' : ''}{t}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Ad links (local, add + inline edit) ---------------- */
 function AdLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>) => void }) {
   const { toast } = useToast();
+  const [editIdx, setEditIdx] = useState<number | null>(null);
   const [url, setUrl] = useState('');
   const [label, setLabel] = useState('');
   const [impression, setImpression] = useState('');
   const [daysOld, setDaysOld] = useState('');
   const [types, setTypes] = useState<string[]>([]);
   const toggleType = (t: string) => setTypes((a) => (a.includes(t) ? a.filter((x) => x !== t) : [...a, t]));
+  const upd = (i: number, patch: Partial<AdLink>) => set({ ad_links: draft.ad_links.map((l, idx) => idx === i ? { ...l, ...patch } : l) });
+  const typesOf = (l: AdLink) => (l.ad_type ? l.ad_type.split(',').map((s) => s.trim()).filter(Boolean) : []);
+  const toggleItemType = (i: number, t: string) => {
+    const cur = typesOf(draft.ad_links[i]);
+    const next = cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t];
+    upd(i, { ad_type: next.join(', ') });
+  };
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     const u = url.trim();
@@ -317,8 +368,8 @@ function AdLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>)
     set({ ad_links: [...draft.ad_links, { url: u, label: label.trim(), impression: impression.trim(), days_old: daysOld, ad_type: types.join(', '), status: 'pending' }] });
     setUrl(''); setLabel(''); setImpression(''); setDaysOld(''); setTypes([]);
   };
-  const toggle = (i: number) => set({ ad_links: draft.ad_links.map((l, idx) => idx === i ? { ...l, status: l.status === 'pending' ? 'done' : 'pending' } : l) });
-  const del = (i: number) => set({ ad_links: draft.ad_links.filter((_, idx) => idx !== i) });
+  const toggle = (i: number) => upd(i, { status: draft.ad_links[i].status === 'pending' ? 'done' : 'pending' });
+  const del = (i: number) => { setEditIdx(null); set({ ad_links: draft.ad_links.filter((_, idx) => idx !== i) }); };
   const pending = draft.ad_links.filter((l) => l.status === 'pending').length;
   const totalImp = draft.ad_links.reduce((s, l) => s + (l.impression === '' ? 0 : Number(l.impression) || 0), 0);
   return (
@@ -326,7 +377,23 @@ function AdLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>)
       action={<span className="text-xs text-gray-400">{draft.ad_links.length} total · {pending} pending · 👁 {fmtNum(totalImp)}</span>}>
       <div className="space-y-2 mb-3">
         {draft.ad_links.length === 0 && <EmptyState>No links yet — add creatives to review.</EmptyState>}
-        {draft.ad_links.map((l, i) => (
+        {draft.ad_links.map((l, i) => editIdx === i ? (
+          <div key={i} className="rounded-xl border border-accent/40 bg-accent/5 p-2 space-y-2">
+            <div className="flex gap-2 flex-wrap">
+              <input className="input flex-1 min-w-[150px] bg-white" placeholder="https://…" value={l.url} onChange={(e) => upd(i, { url: e.target.value })} />
+              <input className="input w-24 bg-white" placeholder="Label" value={l.label} onChange={(e) => upd(i, { label: e.target.value })} />
+              <input className="input w-24 bg-white" type="number" placeholder="Impressions" value={l.impression} onChange={(e) => upd(i, { impression: e.target.value })} />
+              <select className="input w-32 bg-white" value={l.days_old} onChange={(e) => upd(i, { days_old: e.target.value })}>
+                <option value="">Days old…</option>
+                {DAYS_OLD_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+            <AdTypePicker selected={typesOf(l)} onToggle={(t) => toggleItemType(i, t)} />
+            <div className="flex justify-end">
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => { if (!typesOf(l).length) { toast('Select at least one ad type', 'err'); return; } setEditIdx(null); }}>✓ Done</button>
+            </div>
+          </div>
+        ) : (
           <div key={i} className="item-box flex-wrap">
             <button type="button" onClick={() => toggle(i)}
               className={`btn btn-sm shrink-0 ${l.status === 'done' ? 'bg-done/10 text-done' : 'bg-pending/10 text-pending'}`}>
@@ -336,6 +403,7 @@ function AdLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>)
             {l.ad_type && <span className="text-[11px] shrink-0 whitespace-nowrap bg-accent/10 text-accent rounded-full px-2 py-0.5 font-medium" title="Ad type">{l.ad_type}</span>}
             {l.days_old && <span className="text-[11px] shrink-0 whitespace-nowrap bg-gray-100 text-gray-600 rounded-full px-2 py-0.5" title="Ad age">🗓 {l.days_old}</span>}
             {l.impression !== '' && <span className="text-xs text-gray-500 shrink-0 whitespace-nowrap" title="Impressions">👁 {fmtNum(Number(l.impression))}</span>}
+            <button type="button" onClick={() => setEditIdx(i)} className="text-slate-400 hover:text-accent text-sm shrink-0" title="Edit">✎</button>
             <button type="button" onClick={() => del(i)} className="icon-x" aria-label="Delete">✕</button>
           </div>
         ))}
@@ -350,20 +418,7 @@ function AdLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>)
             {DAYS_OLD_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </div>
-        <div>
-          <p className="text-[11px] font-semibold text-gray-500 mb-1">Ad type <span className="text-danger">*</span> (pick one or more)</p>
-          <div className="flex flex-wrap gap-1.5">
-            {AD_TYPE_OPTIONS.map((t) => {
-              const on = types.includes(t);
-              return (
-                <button type="button" key={t} onClick={() => toggleType(t)}
-                  className={`text-xs px-2.5 py-1 rounded-lg border transition ${on ? 'bg-accent text-white border-accent' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
-                  {on ? '✓ ' : ''}{t}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <AdTypePicker selected={types} onToggle={toggleType} />
         <div className="flex justify-end">
           <button className="btn btn-primary shrink-0">Add link</button>
         </div>
@@ -372,12 +427,14 @@ function AdLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>)
   );
 }
 
-/* ---------------- Product page / competitor links (local) ---------------- */
+/* ---------------- Product page / competitor links (local, add + inline edit) ---------------- */
 function ProductLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>) => void }) {
   const { toast } = useToast();
+  const [editIdx, setEditIdx] = useState<number | null>(null);
   const [url, setUrl] = useState('');
   const [label, setLabel] = useState('');
   const [price, setPrice] = useState('');
+  const upd = (i: number, patch: Partial<ProductLink>) => set({ product_links: draft.product_links.map((l, idx) => idx === i ? { ...l, ...patch } : l) });
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     const u = url.trim();
@@ -388,7 +445,7 @@ function ProductLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Dr
     set({ product_links: [...draft.product_links, { url: u, label: label.trim(), price: price.trim() }] });
     setUrl(''); setLabel(''); setPrice('');
   };
-  const del = (i: number) => set({ product_links: draft.product_links.filter((_, idx) => idx !== i) });
+  const del = (i: number) => { setEditIdx(null); set({ product_links: draft.product_links.filter((_, idx) => idx !== i) }); };
   const nums = draft.product_links.map((l) => (l.price === '' ? NaN : Number(l.price))).filter((n) => !isNaN(n));
   const avg = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
   return (
@@ -396,10 +453,21 @@ function ProductLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Dr
       action={avg != null ? <span className="text-xs text-gray-400">avg {fmtMoney(Math.round(avg))} · {nums.length} priced</span> : undefined}>
       <div className="space-y-2 mb-3">
         {draft.product_links.length === 0 && <EmptyState>No product/competitor links yet — add pages with their listed price.</EmptyState>}
-        {draft.product_links.map((l, i) => (
+        {draft.product_links.map((l, i) => editIdx === i ? (
+          <div key={i} className="rounded-xl border border-accent/40 bg-accent/5 p-2 flex gap-2 flex-wrap items-center">
+            <input className="input flex-1 min-w-[150px] bg-white" placeholder="https://…" value={l.url} onChange={(e) => upd(i, { url: e.target.value })} />
+            <input className="input w-24 bg-white" placeholder="Label" value={l.label} onChange={(e) => upd(i, { label: e.target.value })} />
+            <div className="relative w-28">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₹</span>
+              <input className="input pl-7 bg-white" type="number" placeholder="Price" value={l.price} onChange={(e) => upd(i, { price: e.target.value })} />
+            </div>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditIdx(null)}>✓ Done</button>
+          </div>
+        ) : (
           <div key={i} className="item-box">
             <a href={l.url} target="_blank" rel="noreferrer" className="text-sm text-accent hover:underline truncate flex-1 min-w-0">{l.label || l.url}</a>
             {l.price !== '' && <span className="text-sm font-semibold text-ink shrink-0 whitespace-nowrap">{fmtMoney(Number(l.price))}</span>}
+            <button type="button" onClick={() => setEditIdx(i)} className="text-slate-400 hover:text-accent text-sm shrink-0" title="Edit">✎</button>
             <button type="button" onClick={() => del(i)} className="icon-x" aria-label="Delete">✕</button>
           </div>
         ))}
@@ -417,11 +485,13 @@ function ProductLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Dr
   );
 }
 
-/* ---------------- Suppliers (local) ---------------- */
+/* ---------------- Suppliers (local, add + inline edit) ---------------- */
 function SuppliersSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>) => void }) {
   const { toast } = useToast();
+  const [editIdx, setEditIdx] = useState<number | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const upd = (i: number, patch: Partial<Supplier>) => set({ suppliers: draft.suppliers.map((s, idx) => idx === i ? { ...s, ...patch } : s) });
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     const n = name.trim();
@@ -432,16 +502,23 @@ function SuppliersSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft
     set({ suppliers: [...draft.suppliers, { name: n, phone: phone.trim() }] });
     setName(''); setPhone('');
   };
-  const del = (i: number) => set({ suppliers: draft.suppliers.filter((_, idx) => idx !== i) });
+  const del = (i: number) => { setEditIdx(null); set({ suppliers: draft.suppliers.filter((_, idx) => idx !== i) }); };
   return (
     <SectionCard title="Suppliers" icon="🏭">
       <div className="space-y-2 mb-3">
         {draft.suppliers.length === 0 && <EmptyState>No suppliers yet.</EmptyState>}
-        {draft.suppliers.map((s, i) => (
+        {draft.suppliers.map((s, i) => editIdx === i ? (
+          <div key={i} className="rounded-xl border border-accent/40 bg-accent/5 p-2 flex gap-2 flex-wrap items-center">
+            <input className="input flex-1 min-w-[140px] bg-white" placeholder="Supplier name" value={s.name} onChange={(e) => upd(i, { name: e.target.value })} />
+            <input className="input w-36 bg-white" placeholder="Phone" value={s.phone} onChange={(e) => upd(i, { phone: e.target.value })} />
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => { if (!s.name.trim()) { toast('Supplier name required', 'err'); return; } setEditIdx(null); }}>✓ Done</button>
+          </div>
+        ) : (
           <div key={i} className="item-box">
             <div className="grid place-items-center w-8 h-8 rounded-lg bg-accent/10 text-accent text-sm font-bold shrink-0">{(s.name || '?').charAt(0).toUpperCase()}</div>
             <span className="text-sm font-medium text-ink flex-1 min-w-0 truncate">{s.name}</span>
             {s.phone && <a href={`tel:${s.phone}`} className="text-sm text-accent hover:underline shrink-0">📞 {s.phone}</a>}
+            <button type="button" onClick={() => setEditIdx(i)} className="text-slate-400 hover:text-accent text-sm shrink-0" title="Edit">✎</button>
             <button type="button" onClick={() => del(i)} className="icon-x" aria-label="Delete">✕</button>
           </div>
         ))}
@@ -455,9 +532,10 @@ function SuppliersSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft
   );
 }
 
-/* ---------------- Tags (local) ---------------- */
+/* ---------------- Tags (local, add + inline edit) ---------------- */
 function TagsSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>) => void }) {
   const { toast } = useToast();
+  const [editIdx, setEditIdx] = useState<number | null>(null);
   const [tag, setTag] = useState('');
   const add = (e: React.FormEvent) => {
     e.preventDefault();
@@ -474,7 +552,14 @@ function TagsSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>) =>
     if (dupes.length) toast(`Already exists: ${dupes.join(', ')}`, 'err');
     if (fresh.length) { set({ tags: [...draft.tags, ...fresh] }); setTag(''); }
   };
-  const del = (i: number) => set({ tags: draft.tags.filter((_, idx) => idx !== i) });
+  const del = (i: number) => { setEditIdx(null); set({ tags: draft.tags.filter((_, idx) => idx !== i) }); };
+  const upd = (i: number, val: string) => set({ tags: draft.tags.map((t, idx) => idx === i ? val : t) });
+  const commitEdit = (i: number) => {
+    const v = draft.tags[i].trim();
+    if (!v) { toast('Tag cannot be empty', 'err'); return; }
+    if (draft.tags.some((t, idx) => idx !== i && t.trim().toLowerCase() === v.toLowerCase())) { toast('That tag already exists', 'err'); return; }
+    setEditIdx(null);
+  };
   const pipi = draft.tags.length
     ? `https://www.pipiads.com/search?keyword=${encodeURIComponent(draft.tags.join(' '))}`
     : null;
@@ -483,9 +568,16 @@ function TagsSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>) =>
       action={pipi && <a href={pipi} target="_blank" rel="noreferrer" className="btn btn-soft btn-sm">🔍 PiPi Ads ↗</a>}>
       <div className="flex flex-wrap gap-2 mb-3">
         {draft.tags.length === 0 && <EmptyState>No tags yet — used to hunt ads in spy tools.</EmptyState>}
-        {draft.tags.map((t, i) => (
+        {draft.tags.map((t, i) => editIdx === i ? (
+          <span key={i} className="inline-flex items-center gap-1 bg-accent/5 border border-accent/40 rounded-lg pl-2 pr-1 py-1">
+            <input className="input py-1 px-2 w-28 text-sm" value={t} autoFocus
+              onChange={(e) => upd(i, e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(i); }} />
+            <button type="button" onClick={() => commitEdit(i)} className="text-accent font-bold text-sm px-1">✓</button>
+          </span>
+        ) : (
           <span key={i} className="inline-flex items-center gap-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg pl-3 pr-1.5 py-1.5 text-sm font-medium shadow-sm">
-            {t}
+            <button type="button" onClick={() => setEditIdx(i)} className="hover:text-accent" title="Edit">{t}</button>
             <button type="button" onClick={() => del(i)} className="text-gray-300 hover:text-danger">✕</button>
           </span>
         ))}
@@ -498,16 +590,18 @@ function TagsSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>) =>
   );
 }
 
-/* ---------------- Comments (local) ---------------- */
+/* ---------------- Comments (local, add + inline edit) ---------------- */
 function CommentsSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>) => void }) {
+  const [editIdx, setEditIdx] = useState<number | null>(null);
   const [body, setBody] = useState('');
+  const upd = (i: number, val: string) => set({ comments: draft.comments.map((c, idx) => idx === i ? { ...c, body: val } : c) });
   const add = (e: React.FormEvent) => {
     e.preventDefault();
     if (!body.trim()) return;
     set({ comments: [{ body: body.trim() }, ...draft.comments] });   // newest first
     setBody('');
   };
-  const del = (i: number) => set({ comments: draft.comments.filter((_, idx) => idx !== i) });
+  const del = (i: number) => { setEditIdx(null); set({ comments: draft.comments.filter((_, idx) => idx !== i) }); };
   return (
     <SectionCard title="Comments" icon="💬">
       <form onSubmit={add} className="rounded-xl border border-gray-200 bg-gray-50/60 p-2 flex gap-2 mb-3">
@@ -516,12 +610,18 @@ function CommentsSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>
       </form>
       <div className="space-y-2">
         {draft.comments.length === 0 && <EmptyState>No comments yet.</EmptyState>}
-        {draft.comments.map((c, i) => (
+        {draft.comments.map((c, i) => editIdx === i ? (
+          <div key={i} className="rounded-xl border border-accent/40 bg-accent/5 px-3 py-2.5 flex items-start gap-2">
+            <textarea className="input flex-1 min-h-[60px] resize-y" value={c.body} autoFocus onChange={(e) => upd(i, e.target.value)} />
+            <button type="button" onClick={() => { if (c.body.trim()) setEditIdx(null); }} className="btn btn-primary btn-sm shrink-0">✓ Done</button>
+          </div>
+        ) : (
           <div key={i} className="rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 flex items-start gap-3">
             <div className="flex-1 min-w-0">
               <p className="text-sm text-ink whitespace-pre-wrap break-words">{c.body}</p>
               <p className="text-[11px] text-gray-400 mt-1">{c.created_at ? new Date(c.created_at + 'Z').toLocaleString() : 'just now (unsaved)'}</p>
             </div>
+            <button type="button" onClick={() => setEditIdx(i)} className="text-slate-400 hover:text-accent text-sm shrink-0" title="Edit">✎</button>
             <button type="button" onClick={() => del(i)} className="icon-x" aria-label="Delete">✕</button>
           </div>
         ))}
