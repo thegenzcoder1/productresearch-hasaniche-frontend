@@ -9,7 +9,7 @@ import { useNavGuard, useUnsavedChanges } from '@/components/NavGuard';
 const DAYS_OLD_OPTIONS = ['This Week', 'One Week', 'Two Weeks', '3 Weeks', '> 1 Month', '> 2 Months'];
 const AD_TYPE_OPTIONS = ['UGC', 'VSL', 'Hook', 'Testimonial', 'Unboxing', 'Demo', 'Founder Story', 'Problem/Solution', 'Listicle', 'Comparison', 'Meme', 'Static', 'Carousel', 'Explainer'];
 
-type Supplier = { name: string; phone: string };
+type Supplier = { name: string; phone: string; price: string; dropshipping: boolean };
 type AdLink = { url: string; label: string; impression: string; days_old: string; ad_type: string; status: 'pending' | 'done'; created_at?: string };
 type ProductLink = { url: string; label: string; price: string };
 type Comment = { body: string; created_at?: string };
@@ -34,7 +34,7 @@ const toDraft = (p: any): Draft => ({
   mrp: p.mrp == null ? '' : String(p.mrp),
   amazon_rating: p.amazon_rating == null ? '' : String(p.amazon_rating),
   images: [p.image_path ?? null, p.image_path_2 ?? null, p.image_path_3 ?? null, p.image_path_4 ?? null],
-  suppliers: (p.suppliers || []).map((s: any) => ({ name: s.name || '', phone: s.phone || '' })),
+  suppliers: (p.suppliers || []).map((s: any) => ({ name: s.name || '', phone: s.phone || '', price: s.price == null ? '' : String(s.price), dropshipping: !!s.dropshipping })),
   tags: (p.tags || []).map((t: any) => (typeof t === 'string' ? t : t.tag)),
   ad_links: (p.ad_links || []).map((l: any) => ({ url: l.url, label: l.label || '', impression: l.impression == null ? '' : String(l.impression), days_old: l.days_old || '', ad_type: l.ad_type || '', status: l.status, created_at: l.created_at })),
   product_links: (p.product_links || []).map((l: any) => ({ url: l.url, label: l.label || '', price: l.price == null ? '' : String(l.price) })),
@@ -138,7 +138,7 @@ export default function ProductDetail() {
           image_path_2: finalPaths[1] || null,
           image_path_3: finalPaths[2] || null,
           image_path_4: finalPaths[3] || null,
-          suppliers: draft.suppliers,
+          suppliers: draft.suppliers.map((s) => ({ ...s, price: s.price === '' ? null : Number(s.price), dropshipping: s.dropshipping ? 1 : 0 })),
           tags: draft.tags,
           ad_links: draft.ad_links.map((l) => ({ ...l, impression: l.impression === '' ? null : Number(l.impression), days_old: l.days_old || null, ad_type: l.ad_type || null })),
           product_links: draft.product_links.map((l) => ({ url: l.url, label: l.label || null, price: l.price === '' ? null : Number(l.price) })),
@@ -485,12 +485,14 @@ function ProductLinksSection({ draft, set }: { draft: Draft; set: (p: Partial<Dr
   );
 }
 
-/* ---------------- Suppliers (local, add + inline edit) ---------------- */
+/* ---------------- Suppliers (local, add + inline edit; per-supplier price + dropshipping) ---------------- */
 function SuppliersSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft>) => void }) {
   const { toast } = useToast();
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [price, setPrice] = useState('');
+  const [drop, setDrop] = useState(false);
   const upd = (i: number, patch: Partial<Supplier>) => set({ suppliers: draft.suppliers.map((s, idx) => idx === i ? { ...s, ...patch } : s) });
   const add = (e: React.FormEvent) => {
     e.preventDefault();
@@ -499,33 +501,55 @@ function SuppliersSection({ draft, set }: { draft: Draft; set: (p: Partial<Draft
     if (draft.suppliers.some((s) => s.name.trim().toLowerCase() === n.toLowerCase())) {
       toast('This supplier already exists', 'err'); return;
     }
-    set({ suppliers: [...draft.suppliers, { name: n, phone: phone.trim() }] });
-    setName(''); setPhone('');
+    set({ suppliers: [...draft.suppliers, { name: n, phone: phone.trim(), price: price.trim(), dropshipping: drop }] });
+    setName(''); setPhone(''); setPrice(''); setDrop(false);
   };
   const del = (i: number) => { setEditIdx(null); set({ suppliers: draft.suppliers.filter((_, idx) => idx !== i) }); };
   return (
-    <SectionCard title="Suppliers" icon="🏭">
+    <SectionCard title="Suppliers" icon="🏭"
+      action={<span className="text-xs text-gray-400">💧 = dropshipping</span>}>
       <div className="space-y-2 mb-3">
         {draft.suppliers.length === 0 && <EmptyState>No suppliers yet.</EmptyState>}
         {draft.suppliers.map((s, i) => editIdx === i ? (
           <div key={i} className="rounded-xl border border-accent/40 bg-accent/5 p-2 flex gap-2 flex-wrap items-center">
-            <input className="input flex-1 min-w-[140px] bg-white" placeholder="Supplier name" value={s.name} onChange={(e) => upd(i, { name: e.target.value })} />
-            <input className="input w-36 bg-white" placeholder="Phone" value={s.phone} onChange={(e) => upd(i, { phone: e.target.value })} />
+            <input className="input flex-1 min-w-[130px] bg-white" placeholder="Supplier name" value={s.name} onChange={(e) => upd(i, { name: e.target.value })} />
+            <input className="input w-32 bg-white" placeholder="Phone" value={s.phone} onChange={(e) => upd(i, { phone: e.target.value })} />
+            <div className="relative w-24">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₹</span>
+              <input className="input pl-7 bg-white" type="number" placeholder="Price" value={s.price} onChange={(e) => upd(i, { price: e.target.value })} />
+            </div>
+            <label className="flex items-center gap-1.5 text-sm font-medium text-ink cursor-pointer select-none px-1">
+              <input type="checkbox" className="w-4 h-4 accent-accent" checked={s.dropshipping} onChange={(e) => upd(i, { dropshipping: e.target.checked })} />
+              Dropship
+            </label>
             <button type="button" className="btn btn-primary btn-sm" onClick={() => { if (!s.name.trim()) { toast('Supplier name required', 'err'); return; } setEditIdx(null); }}>✓ Done</button>
           </div>
         ) : (
           <div key={i} className="item-box">
             <div className="grid place-items-center w-8 h-8 rounded-lg bg-accent/10 text-accent text-sm font-bold shrink-0">{(s.name || '?').charAt(0).toUpperCase()}</div>
             <span className="text-sm font-medium text-ink flex-1 min-w-0 truncate">{s.name}</span>
-            {s.phone && <a href={`tel:${s.phone}`} className="text-sm text-accent hover:underline shrink-0">📞 {s.phone}</a>}
+            {s.phone && <a href={`tel:${s.phone}`} className="text-sm text-accent hover:underline shrink-0 hidden sm:inline">📞 {s.phone}</a>}
+            {s.price !== '' && <span className="text-sm font-bold text-ink shrink-0 whitespace-nowrap">{fmtMoney(Number(s.price))}</span>}
+            <label className={`flex items-center gap-1 text-xs font-semibold shrink-0 cursor-pointer select-none rounded-lg px-2 py-1 transition ${s.dropshipping ? 'bg-accent/10 text-accent' : 'text-slate-400 hover:bg-slate-100'}`} title="Dropshipping">
+              <input type="checkbox" className="w-3.5 h-3.5 accent-accent" checked={s.dropshipping} onChange={(e) => upd(i, { dropshipping: e.target.checked })} />
+              💧 Drop
+            </label>
             <button type="button" onClick={() => setEditIdx(i)} className="text-slate-400 hover:text-accent text-sm shrink-0" title="Edit">✎</button>
             <button type="button" onClick={() => del(i)} className="icon-x" aria-label="Delete">✕</button>
           </div>
         ))}
       </div>
-      <form onSubmit={add} className="rounded-xl border border-gray-200 bg-gray-50/60 p-2 flex gap-2 flex-wrap">
-        <input className="input flex-1 min-w-[140px] bg-white" placeholder="Supplier name" value={name} onChange={(e) => setName(e.target.value)} />
-        <input className="input w-36 bg-white" placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      <form onSubmit={add} className="rounded-xl border border-gray-200 bg-gray-50/60 p-2 flex gap-2 flex-wrap items-center">
+        <input className="input flex-1 min-w-[130px] bg-white" placeholder="Supplier name" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="input w-32 bg-white" placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <div className="relative w-24">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₹</span>
+          <input className="input pl-7 bg-white" type="number" placeholder="Price" value={price} onChange={(e) => setPrice(e.target.value)} />
+        </div>
+        <label className="flex items-center gap-1.5 text-sm font-medium text-ink cursor-pointer select-none px-1">
+          <input type="checkbox" className="w-4 h-4 accent-accent" checked={drop} onChange={(e) => setDrop(e.target.checked)} />
+          Dropship
+        </label>
         <button className="btn btn-primary shrink-0">Add</button>
       </form>
     </SectionCard>
